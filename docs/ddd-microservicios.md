@@ -20,14 +20,16 @@ Observaciones clave:
 
 ## 2. Definir los contextos acotados (Bounded Contexts)
 
-Se identifican 4 contextos, alineados 1:1 con los componentes ya declarados en el enunciado:
+Se identifican 4 contextos. Se nombran por la **capacidad de negocio** que cubren (ubiquitous language del contexto), no por el nombre crudo de la entidad JPA que hoy los respalda — así el nombre del contexto no queda atado al modelo de datos actual y puede seguir teniendo sentido aunque el contexto crezca con más entidades/reglas en el futuro:
 
-1. **Gestión de Miembros** — alta y consulta de socios del gimnasio.
-2. **Gestión de Clases** — programación de clases y su horario/capacidad.
-3. **Gestión de Entrenadores** — alta y consulta del personal que dicta clases.
-4. **Gestión de Equipos** — inventario de equipamiento del gimnasio.
+| Contexto (capacidad de negocio) | Responsabilidad | Entidad JPA que lo respalda hoy |
+|---|---|---|
+| **Membresías** | Alta y consulta de socios del gimnasio | `Miembro` |
+| **Programación** | Programación de clases, horario y capacidad | `Clase` |
+| **Personal** | Alta y consulta del personal que dicta clases | `Entrenador` |
+| **Inventario** | Gestión del equipamiento del gimnasio | `Equipo` |
 
-El único cruce de contexto es **Clases → Entrenadores** (una clase la dicta un entrenador). Para que cada contexto tenga su propia base de datos (*database-per-service*), esa relación deja de ser un `@ManyToOne` JPA y pasa a ser una referencia por id (`entrenadorId`) resuelta vía llamada REST al servicio de Entrenadores cuando se necesite el detalle.
+El único cruce de contexto es **Programación → Personal** (una clase la dicta un entrenador). Para que cada contexto tenga su propia base de datos (*database-per-service*), esa relación deja de ser un `@ManyToOne` JPA y pasa a ser una referencia por id (`entrenadorId`) resuelta vía llamada REST al contexto de Personal cuando se necesite el detalle.
 
 ## 3. Definir entidades, agregados y servicios
 
@@ -35,25 +37,27 @@ Cada contexto se modela como un agregado con una única raíz (no hay sub-entida
 
 | Contexto | Raíz de agregado | Invariantes / responsabilidad del servicio |
 |---|---|---|
-| Miembros | `Miembro` | Unicidad de email, fecha de inscripción por defecto = hoy |
-| Clases | `Clase` | `capacidadMaxima > 0`; `entrenadorId` debe existir (validado contra el contexto Entrenadores) |
-| Entrenadores | `Entrenador` | Datos de contacto/especialidad del entrenador |
-| Equipos | `Equipo` | `cantidad >= 0` (control de inventario) |
+| Membresías | `Miembro` | Unicidad de email, fecha de inscripción por defecto = hoy |
+| Programación | `Clase` | `capacidadMaxima > 0`; `entrenadorId` debe existir (validado contra el contexto Personal) |
+| Personal | `Entrenador` | Datos de contacto/especialidad del entrenador |
+| Inventario | `Equipo` | `cantidad >= 0` (control de inventario) |
 
 Cada agregado conserva su propio repositorio (`*Repository`) y servicio de aplicación (`*Service`), tal como ya están separados en el monolito — el trabajo de refactor es principalmente de **empaquetado** (moverlos a proyectos independientes) más el cambio de la relación `Clase.entrenador` a `entrenadorId`.
 
 ## 4. Identificar microservicios (máximo 4)
 
-Se proponen exactamente 4 microservicios, uno por contexto acotado:
+Se proponen 4 microservicios, uno por contexto acotado, nombrados por la capacidad de negocio (no por la entidad):
 
-| Microservicio | Puerto sugerido | Entidad | Endpoints (equivalentes a `GimnasioController`) |
-|---|---|---|---|
-| `ms-miembros` | 8081 | Miembro | `POST/GET /api/miembros` |
-| `ms-clases` | 8082 | Clase | `POST/GET /api/clases` |
-| `ms-entrenadores` | 8083 | Entrenador | `POST/GET /api/entrenadores` |
-| `ms-equipos` | 8084 | Equipo | `POST/GET /api/equipos` |
+| Microservicio | Contexto | Puerto sugerido | Entidad principal | Endpoints (equivalentes a `GimnasioController`) |
+|---|---|---|---|---|
+| `ms-membresias` | Membresías | 8081 | Miembro | `POST/GET /api/miembros` |
+| `ms-programacion` | Programación | 8082 | Clase | `POST/GET /api/clases` |
+| `ms-personal` | Personal | 8083 | Entrenador | `POST/GET /api/entrenadores` |
+| `ms-inventario` | Inventario | 8084 | Equipo | `POST/GET /api/equipos` |
 
-`ms-clases` es el único con una dependencia saliente: al crear/consultar una clase, llama por REST a `ms-entrenadores` (`GET /api/entrenadores/{id}`) para validar/enriquecer el `entrenadorId`.
+`ms-programacion` es el único con una dependencia saliente: al crear/consultar una clase, llama por REST a `ms-personal` (`GET /api/entrenadores/{id}`) para validar/enriquecer el `entrenadorId`.
+
+> **Mapeo 1:1 entidad↔microservicio.** Hoy cada contexto termina respaldado por exactamente una entidad porque el monolito es muy simple (4 entidades, casi sin invariantes compartidos entre ellas). Eso es una coincidencia del dominio actual, no una regla de DDD: un bounded context puede agrupar varios agregados que cambian juntos. Se evaluó fusionar **Programación** y **Personal** en un solo contexto (ya que `Clase` depende de `Entrenador`), pero se decidió mantenerlos separados en 4 microservicios independientes, precisamente para que la comunicación REST entre `ms-programacion` y `ms-personal` sea parte visible de la arquitectura (entregable opcional del taller).
 
 ## Diagrama de componentes
 
@@ -62,42 +66,43 @@ Se proponen exactamente 4 microservicios, uno por contexto acotado:
 skinparam componentStyle uml2
 skinparam linetype ortho
 
-node "ms-miembros :8081" {
-  component "Miembro Service" as MiembroSvc
+node "ms-membresias :8081" {
+  component "Membresias Service" as MembresiaSvc
   artifact "Miembro DB" as MiembroDB
-  interface "IMiembro" as IMiembro
-  MiembroSvc ..> MiembroDB
-  MiembroSvc -- IMiembro
-  MiembroDB -[hidden]right-> IMiembro
+  interface "IMembresias" as IMembresias
+  MembresiaSvc ..> MiembroDB
+  MembresiaSvc -- IMembresias
+  MiembroDB -[hidden]right-> IMembresias
 }
 
-node "ms-clases :8082" {
-  component "Clase Service" as ClaseSvc
+node "ms-programacion :8082" {
+  component "Programacion Service" as ProgramacionSvc
   artifact "Clase DB" as ClaseDB
-  interface "IClase" as IClase
-  ClaseSvc ..> ClaseDB
-  ClaseSvc -- IClase
-  ClaseDB -[hidden]right-> IClase
+  interface "IProgramacion" as IProgramacion
+  ProgramacionSvc ..> ClaseDB
+  ProgramacionSvc -- IProgramacion
+  ClaseDB -[hidden]right-> IProgramacion
 }
 
-node "ms-entrenadores :8083" {
-  component "Entrenador Service" as EntrenadorSvc
+node "ms-personal :8083" {
+  component "Personal Service" as PersonalSvc
   artifact "Entrenador DB" as EntrenadorDB
-  interface "IEntrenador" as IEntrenador
-  EntrenadorSvc ..> EntrenadorDB
-  EntrenadorSvc -- IEntrenador
-  EntrenadorDB -[hidden]right-> IEntrenador
+  interface "IPersonal" as IPersonal
+  PersonalSvc ..> EntrenadorDB
+  PersonalSvc -- IPersonal
+  EntrenadorDB -[hidden]right-> IPersonal
 }
 
-node "ms-equipos :8084" {
-  component "Equipo Service" as EquipoSvc
+node "ms-inventario :8084" {
+  component "Inventario Service" as InventarioSvc
   artifact "Equipo DB" as EquipoDB
-  interface "IEquipo" as IEquipo
-  EquipoSvc ..> EquipoDB
-  EquipoSvc -- IEquipo
-  EquipoDB -[hidden]right-> IEquipo
+  interface "IInventario" as IInventario
+  InventarioSvc ..> EquipoDB
+  InventarioSvc -- IInventario
+  EquipoDB -[hidden]right-> IInventario
 }
 
-ClaseSvc --> IEntrenador : REST
+ProgramacionSvc --> IPersonal : REST
 @enduml
 ```
+![deploymentdiag](../images/image.png)
