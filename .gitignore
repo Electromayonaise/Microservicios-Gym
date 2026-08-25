@@ -1,0 +1,13 @@
+# Editor / tooling
+.vscode/
+.metals/
+.bloop/
+.idea/
+*.iml
+
+# Maven build output
+target/
+
+# OS
+.DS_Store
+Thumbs.db
