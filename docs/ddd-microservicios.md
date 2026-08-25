@@ -61,48 +61,4 @@ Se proponen 4 microservicios, uno por contexto acotado, nombrados por la capacid
 
 ## Diagrama de componentes
 
-```plantuml
-@startuml
-skinparam componentStyle uml2
-skinparam linetype ortho
-
-node "ms-membresias :8081" {
-  component "Membresias Service" as MembresiaSvc
-  artifact "Miembro DB" as MiembroDB
-  interface "IMembresias" as IMembresias
-  MembresiaSvc ..> MiembroDB
-  MembresiaSvc -- IMembresias
-  MiembroDB -[hidden]right-> IMembresias
-}
-
-node "ms-programacion :8082" {
-  component "Programacion Service" as ProgramacionSvc
-  artifact "Clase DB" as ClaseDB
-  interface "IProgramacion" as IProgramacion
-  ProgramacionSvc ..> ClaseDB
-  ProgramacionSvc -- IProgramacion
-  ClaseDB -[hidden]right-> IProgramacion
-}
-
-node "ms-personal :8083" {
-  component "Personal Service" as PersonalSvc
-  artifact "Entrenador DB" as EntrenadorDB
-  interface "IPersonal" as IPersonal
-  PersonalSvc ..> EntrenadorDB
-  PersonalSvc -- IPersonal
-  EntrenadorDB -[hidden]right-> IPersonal
-}
-
-node "ms-inventario :8084" {
-  component "Inventario Service" as InventarioSvc
-  artifact "Equipo DB" as EquipoDB
-  interface "IInventario" as IInventario
-  InventarioSvc ..> EquipoDB
-  InventarioSvc -- IInventario
-  EquipoDB -[hidden]right-> IInventario
-}
-
-ProgramacionSvc --> IPersonal : REST
-@enduml
-```
-![deploymentdiag](../images/image.png)
+![deploymentdiag](../images/diagrama-despliegue.drawio.png)
