@@ -7,11 +7,13 @@ Taller de Domain-Driven Design: transformar un monolito Spring Boot de gestión 
 | Carpeta | Qué es |
 |---|---|
 | [`monilito-gimnasio/`](monilito-gimnasio) | El monolito original, punto de partida del taller |
-| [`docs/ddd-microservicios.md`](docs/ddd-microservicios.md) | Análisis DDD: dominio, contextos acotados, agregados y diagrama de componentes |
+| [`docs/ddd-microservicios.md`](docs/ddd-microservicios.md) | Análisis DDD: dominio, contextos acotados, agregados, value objects y diagrama de componentes |
 | [`ms-membresias/`](ms-membresias) | Microservicio — contexto **Membresías** |
 | [`ms-programacion/`](ms-programacion) | Microservicio — contexto **Programación** |
 | [`ms-personal/`](ms-personal) | Microservicio — contexto **Personal** |
 | [`ms-inventario/`](ms-inventario) | Microservicio — contexto **Inventario** |
+| [`docker-compose.yml`](docker-compose.yml) | Levanta los 4 microservicios con un solo comando |
+| [`postman/`](postman) | Colección de Postman con pruebas de los endpoints de cada microservicio |
 
 ## Arquitectura
 
@@ -28,9 +30,27 @@ Diagrama de componentes completo (PlantUML) en [`docs/ddd-microservicios.md`](do
 
 ## Stack
 
-Java 17 · Spring Boot 3.3.2 · Spring Data JPA · H2 (en memoria) · Maven (con wrapper `./mvnw`) · Spring `RestClient` para la comunicación entre servicios.
+Java 17 · Spring Boot 3.3.2 · Spring Data JPA · H2 (en memoria) · Maven (con wrapper `./mvnw`) · Spring `RestClient` para la comunicación entre servicios · Docker Compose.
 
 ## Cómo correrlo
+
+### Opción 1: Docker Compose (recomendada)
+
+Construye y levanta los 4 microservicios con un solo comando:
+
+```bash
+docker compose up --build
+```
+
+`ms-programacion` espera automáticamente a que `ms-personal` esté saludable antes de arrancar (`depends_on` + healthcheck), porque valida `entrenadorId` contra ese contexto por REST. Dentro de la red de Docker se resuelven por el nombre del servicio (`http://ms-personal:8083`), no por `localhost`.
+
+Para detener todo:
+
+```bash
+docker compose down
+```
+
+### Opción 2: Maven, cada microservicio por separado
 
 Cada microservicio es un proyecto Maven independiente y arranca solo (cada uno trae su propio `DataLoader` con datos de ejemplo). Para que la validación REST de `ms-programacion` funcione, levanta primero `ms-personal`:
 
@@ -48,8 +68,16 @@ cd ms-inventario && ./mvnw spring-boot:run
 
 En Windows usa `mvnw.cmd` en lugar de `./mvnw`.
 
-Prueba rápida una vez arriba `ms-personal` y `ms-programacion`:
+### Probar los endpoints
+
+Con los 4 microservicios arriba (por cualquiera de las dos opciones), prueba rápida:
 
 ```bash
 curl http://localhost:8082/api/clases/1/entrenador
+```
+
+O importa [`postman/Gimnasio-Microservicios.postman_collection.json`](postman/Gimnasio-Microservicios.postman_collection.json) en Postman — trae una carpeta por microservicio con casos válidos y casos que verifican las invariantes de dominio (email inválido/duplicado, capacidad y cantidad negativas, especialidad fuera de catálogo, etc.). También se puede correr desde la terminal con [newman](https://github.com/postmanlabs/newman):
+
+```bash
+newman run postman/Gimnasio-Microservicios.postman_collection.json
 ```
