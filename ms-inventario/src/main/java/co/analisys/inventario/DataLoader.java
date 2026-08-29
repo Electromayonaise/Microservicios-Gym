@@ -1,5 +1,6 @@
 package co.analisys.inventario;
 
+import co.analisys.inventario.model.Cantidad;
 import co.analisys.inventario.model.Equipo;
 import co.analisys.inventario.repository.EquipoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,16 +15,10 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        Equipo equipo1 = new Equipo();
-        equipo1.setNombre("Mancuernas");
-        equipo1.setDescripcion("Set de mancuernas de 5kg");
-        equipo1.setCantidad(20);
+        Equipo equipo1 = Equipo.registrar("Mancuernas", "Set de mancuernas de 5kg", new Cantidad(20));
         equipoRepository.save(equipo1);
 
-        Equipo equipo2 = new Equipo();
-        equipo2.setNombre("Bicicleta estática");
-        equipo2.setDescripcion("Bicicleta para spinning");
-        equipo2.setCantidad(15);
+        Equipo equipo2 = Equipo.registrar("Bicicleta estática", "Bicicleta para spinning", new Cantidad(15));
         equipoRepository.save(equipo2);
 
         System.out.println("Datos de ejemplo de Inventario cargados exitosamente.");
