@@ -1,5 +1,6 @@
 package co.analisys.membresias.controller;
 
+import co.analisys.membresias.dto.MiembroRequest;
 import co.analisys.membresias.model.Miembro;
 import co.analisys.membresias.service.MiembroService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +15,8 @@ public class MiembroController {
     private MiembroService miembroService;
 
     @PostMapping
-    public Miembro registrarMiembro(@RequestBody Miembro miembro) {
-        return miembroService.registrarMiembro(miembro);
+    public Miembro registrarMiembro(@RequestBody MiembroRequest request) {
+        return miembroService.registrarMiembro(request.nombre(), request.email());
     }
 
     @GetMapping
