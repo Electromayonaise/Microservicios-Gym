@@ -39,10 +39,27 @@ Cada contexto se modela como un agregado con una única raíz (no hay sub-entida
 |---|---|---|
 | Membresías | `Miembro` | Unicidad de email, fecha de inscripción por defecto = hoy |
 | Programación | `Clase` | `capacidadMaxima > 0`; `entrenadorId` debe existir (validado contra el contexto Personal) |
-| Personal | `Entrenador` | Datos de contacto/especialidad del entrenador |
+| Personal | `Entrenador` | Nombre no vacío; especialidad restringida a un catálogo cerrado (ver 3.1) |
 | Inventario | `Equipo` | `cantidad >= 0` (control de inventario) |
 
 Cada agregado conserva su propio repositorio (`*Repository`) y servicio de aplicación (`*Service`), tal como ya están separados en el monolito — el trabajo de refactor es principalmente de **empaquetado** (moverlos a proyectos independientes) más el cambio de la relación `Clase.entrenador` a `entrenadorId`.
+
+### 3.1 Value objects y protección de invariantes
+
+Las invariantes de la tabla anterior están protegidas mediante value objects que encapsulan cada una, y raíces de agregado que no pueden construirse en un estado inválido: no es posible, por ejemplo, guardar un `Equipo` con `cantidad = -5` ni un `Miembro` con un email duplicado o mal formado.
+
+| Contexto | Value object | Invariante que protege | Mapeo JPA |
+|---|---|---|---|
+| Membresías | `Email` | Formato válido de correo; la unicidad la verifica `MiembroService` contra `MiembroRepository` antes de construir el agregado | `@Embeddable` |
+| Programación | `Capacidad` | `capacidadMaxima > 0` | `@Embeddable` |
+| Programación | `EntrenadorId` | El id de entrenador no puede ser nulo; tipo distinto de `ClaseId` para no confundir referencias entre agregados de contextos distintos | `@Embeddable` |
+| Programación | `ClaseId` | El id de clase no puede ser nulo; se usa en `ClaseService`/`ClaseController` para no aceptar por error un id de otro tipo donde se espera el id de una `Clase` | No mapeado — el `@Id` interno de `Clase` sigue siendo `Long` autogenerado por Hibernate; envolver un id autogenerado en un `@Embeddable`/`@EmbeddedId` no aporta ninguna invariante nueva y complica la generación de la clave |
+| Inventario | `Cantidad` | `cantidad >= 0` | `@Embeddable` |
+| Personal | `Especialidad` (enum) | Solo se aceptan valores de un catálogo cerrado: `YOGA`, `SPINNING`, `CROSSFIT`, `PILATES`, `MUSCULACION`, `NATACION`, `BOXEO`, `ZUMBA`, `FUNCIONAL`, `CALISTENIA` | `@Enumerated(EnumType.STRING)` |
+
+`EntrenadorId`/`ClaseId` solo existen en `ms-programacion`, porque es el único microservicio con una referencia cruzada entre agregados de contextos distintos (`Clase.entrenadorId` apunta a un `Entrenador` de `ms-personal`). Dentro de los otros tres microservicios cada `id` autogenerado no se cruza con ningún otro tipo de identificador, así que envolverlo en un value object no protegería ninguna invariante real.
+
+Cada raíz de agregado (`Miembro`, `Clase`, `Equipo`, `Entrenador`) expone un constructor sin argumentos `protected` (solo para que Hibernate la reconstruya desde la base de datos) y un **factory method estático con nombre de dominio** — `Miembro.registrar(...)`, `Clase.programar(...)`, `Equipo.registrar(...)`, `Entrenador.registrar(...)` — como única vía pública de creación. El factory encapsula reglas que van más allá de validar los parámetros recibidos (p. ej. `Miembro.registrar` fija `fechaInscripcion = hoy`, un dato que el llamador nunca provee). Los controladores no reciben la entidad JPA directamente en el `@RequestBody`: reciben un DTO de request (`MiembroRequest`, `ClaseRequest`, `EquipoRequest`, `EntrenadorRequest`) para que la validación de dominio no se pueda saltar enlazando el JSON directo a los setters de la entidad. Las violaciones de invariante se traducen a `400 Bad Request` mediante un `GlobalExceptionHandler` por servicio.
 
 ## 4. Identificar microservicios (máximo 4)
 
@@ -61,4 +78,4 @@ Se proponen 4 microservicios, uno por contexto acotado, nombrados por la capacid
 
 ## Diagrama de componentes
 
-![deploymentdiag](../images/diagrama-despliegue.drawio.png)
+![deploymentdiag](./images/image.png)
