@@ -1,0 +1,51 @@
+services:
+  ms-personal:
+    build: ./ms-personal
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8083/api/entrenadores"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  ms-membresias:
+    build: ./ms-membresias
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/api/miembros"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  ms-inventario:
+    build: ./ms-inventario
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8084/api/equipos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  ms-programacion:
+    build: ./ms-programacion
+    ports:
+      - "8082:8082"
+    environment:
+      # Dentro de la red de docker-compose, ms-personal se resuelve por el
+      # nombre del servicio en vez de localhost.
+      PERSONAL_SERVICE_URL: http://ms-personal:8083
+    depends_on:
+      ms-personal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8082/api/clases"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
