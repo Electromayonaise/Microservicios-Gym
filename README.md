@@ -1,6 +1,6 @@
 # Sistema de Gestión de un Gimnasio — de monolito a microservicios
 
-Taller de Domain-Driven Design: transformar un monolito Spring Boot de gestión de gimnasio en una arquitectura de microservicios. Enunciado completo en [`docs/Statement.pdf`](docs/Statement.pdf).
+Taller de Domain-Driven Design: transformar un monolito Spring Boot de gestión de gimnasio en una arquitectura de microservicios. Enunciado completo en [`docs/Statement.pdf`](docs/Statement.pdf). Presentación en [`docs/DDD-Monolito-a-Microservicios-Gimnasio.pptx`](docs/DDD-Monolito-a-Microservicios-Gimnasio.pptx).
 
 ## Contenido del repo
 
@@ -8,6 +8,7 @@ Taller de Domain-Driven Design: transformar un monolito Spring Boot de gestión 
 |---|---|
 | [`monilito-gimnasio/`](monilito-gimnasio) | El monolito original, punto de partida del taller |
 | [`docs/ddd-microservicios.md`](docs/ddd-microservicios.md) | Análisis DDD: dominio, contextos acotados, agregados, value objects y diagrama de componentes |
+| [`docs/DDD-Monolito-a-Microservicios-Gimnasio.pptx`](docs/DDD-Monolito-a-Microservicios-Gimnasio.pptx) | Presentación del taller |
 | [`ms-membresias/`](ms-membresias) | Microservicio — contexto **Membresías** |
 | [`ms-programacion/`](ms-programacion) | Microservicio — contexto **Programación** |
 | [`ms-personal/`](ms-personal) | Microservicio — contexto **Personal** |
