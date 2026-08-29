@@ -1,0 +1,620 @@
+{
+  "info": {
+    "_postman_id": "9a2f8f4a-9c3e-4a7b-8f2b-6a2b7c8e2b10",
+    "name": "Gimnasio - Microservicios",
+    "description": "Pruebas de los 4 microservicios del taller (ms-membresias, ms-programacion, ms-personal, ms-inventario). Cada microservicio tiene su propia carpeta con casos válidos y casos que verifican las invariantes de dominio (Value Objects, factory methods, enum de especialidad, etc). Antes de correr la carpeta ms-programacion, ms-personal debe estar levantado, porque ms-programacion valida entrenadorId contra el contexto Personal por REST. Las pruebas asumen una base H2 en memoria recién arrancada (DataLoader sembrando los ids 1 y 2 en cada servicio).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "ms_membresias_url", "value": "http://localhost:8081" },
+    { "key": "ms_programacion_url", "value": "http://localhost:8082" },
+    { "key": "ms_personal_url", "value": "http://localhost:8083" },
+    { "key": "ms_inventario_url", "value": "http://localhost:8084" }
+  ],
+  "item": [
+    {
+      "name": "ms-membresias",
+      "item": [
+        {
+          "name": "GET Listar miembros",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('La respuesta es un arreglo', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar miembro - valido",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Pedro Ruiz\",\n    \"email\": \"pedro.ruiz+{{$timestamp}}@email.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('El miembro creado tiene id', function () {",
+                  "    pm.expect(body).to.have.property('id');",
+                  "});",
+                  "pm.test('fechaInscripcion fue asignada por el agregado', function () {",
+                  "    pm.expect(body.fechaInscripcion).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar miembro - email con formato invalido",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Formato Malo\",\n    \"email\": \"no-es-un-email\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 400 (invariante Email violada)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('El cuerpo incluye el mensaje de error', function () {",
+                  "    pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar miembro - email duplicado",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Otro Juan\",\n    \"email\": \"juan@email.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 409 (email ya registrado)', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar miembro - nombre vacio",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"\",\n    \"email\": \"vacio@email.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 400 (nombre vacio)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ms-programacion",
+      "item": [
+        {
+          "name": "GET Listar clases",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('La respuesta es un arreglo', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Programar clase - valido",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Crossfit Night\",\n    \"horario\": \"2026-09-10T19:00:00\",\n    \"capacidadMaxima\": 12,\n    \"entrenadorId\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (requiere ms-personal corriendo con entrenador id 1 sembrado)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('capacidadMaxima coincide', function () {",
+                  "    pm.expect(body.capacidadMaxima).to.eql(12);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Programar clase - capacidadMaxima invalida",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Clase sin cupo\",\n    \"horario\": \"2026-09-10T19:00:00\",\n    \"capacidadMaxima\": 0,\n    \"entrenadorId\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 400 (invariante Capacidad violada)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('El cuerpo incluye el mensaje de error', function () {",
+                  "    pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Programar clase - entrenadorId inexistente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Clase huerfana\",\n    \"horario\": \"2026-09-10T19:00:00\",\n    \"capacidadMaxima\": 10,\n    \"entrenadorId\": 9999\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 400 (entrenadorId no existe en ms-personal)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Detalle de clase con entrenador",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases/1/entrenador",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases", "1", "entrenador"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (comunicacion cruzada con ms-personal)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('Incluye el entrenador anidado', function () {",
+                  "    pm.expect(body).to.have.property('entrenador');",
+                  "    pm.expect(body.entrenador).to.have.property('especialidad');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ms-personal",
+      "item": [
+        {
+          "name": "GET Listar entrenadores",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ms_personal_url}}/api/entrenadores",
+              "host": ["{{ms_personal_url}}"],
+              "path": ["api", "entrenadores"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('La respuesta es un arreglo', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Entrenador por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ms_personal_url}}/api/entrenadores/1",
+              "host": ["{{ms_personal_url}}"],
+              "path": ["api", "entrenadores", "1"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('El id coincide', function () {",
+                  "    pm.expect(pm.response.json().id).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Entrenador por id inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ms_personal_url}}/api/entrenadores/9999",
+              "host": ["{{ms_personal_url}}"],
+              "path": ["api", "entrenadores", "9999"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar entrenador - valido",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Laura Sanchez\",\n    \"especialidad\": \"pilates\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_personal_url}}/api/entrenadores",
+              "host": ["{{ms_personal_url}}"],
+              "path": ["api", "entrenadores"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('La especialidad se normaliza al enum (mayusculas)', function () {",
+                  "    pm.expect(pm.response.json().especialidad).to.eql('PILATES');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar entrenador - especialidad fuera de catalogo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Entrenador Invalido\",\n    \"especialidad\": \"Baile Moderno\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_personal_url}}/api/entrenadores",
+              "host": ["{{ms_personal_url}}"],
+              "path": ["api", "entrenadores"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 400 (Especialidad fuera del catalogo cerrado)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('El mensaje lista los valores validos', function () {",
+                  "    pm.expect(pm.response.json().error).to.include('YOGA');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar entrenador - nombre vacio",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"\",\n    \"especialidad\": \"yoga\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_personal_url}}/api/entrenadores",
+              "host": ["{{ms_personal_url}}"],
+              "path": ["api", "entrenadores"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 400 (nombre vacio)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ms-inventario",
+      "item": [
+        {
+          "name": "GET Listar equipos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ms_inventario_url}}/api/equipos",
+              "host": ["{{ms_inventario_url}}"],
+              "path": ["api", "equipos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('La respuesta es un arreglo', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Agregar equipo - valido",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Kettlebell 16kg\",\n    \"descripcion\": \"Pesa rusa\",\n    \"cantidad\": 10\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_inventario_url}}/api/equipos",
+              "host": ["{{ms_inventario_url}}"],
+              "path": ["api", "equipos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('La cantidad coincide', function () {",
+                  "    pm.expect(pm.response.json().cantidad).to.eql(10);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Agregar equipo - cantidad negativa",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Equipo danado\",\n    \"descripcion\": \"prueba\",\n    \"cantidad\": -5\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_inventario_url}}/api/equipos",
+              "host": ["{{ms_inventario_url}}"],
+              "path": ["api", "equipos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 400 (invariante Cantidad violada)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('El cuerpo incluye el mensaje de error', function () {",
+                  "    pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
