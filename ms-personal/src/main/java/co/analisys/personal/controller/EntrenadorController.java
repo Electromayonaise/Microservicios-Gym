@@ -1,5 +1,6 @@
 package co.analisys.personal.controller;
 
+import co.analisys.personal.dto.EntrenadorRequest;
 import co.analisys.personal.model.Entrenador;
 import co.analisys.personal.service.EntrenadorService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +15,8 @@ public class EntrenadorController {
     private EntrenadorService entrenadorService;
 
     @PostMapping
-    public Entrenador agregarEntrenador(@RequestBody Entrenador entrenador) {
-        return entrenadorService.agregarEntrenador(entrenador);
+    public Entrenador agregarEntrenador(@RequestBody EntrenadorRequest request) {
+        return entrenadorService.agregarEntrenador(request);
     }
 
     @GetMapping

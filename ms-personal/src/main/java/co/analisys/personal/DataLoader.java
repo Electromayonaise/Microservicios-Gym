@@ -1,6 +1,7 @@
 package co.analisys.personal;
 
 import co.analisys.personal.model.Entrenador;
+import co.analisys.personal.model.Especialidad;
 import co.analisys.personal.repository.EntrenadorRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
@@ -14,14 +15,10 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        Entrenador entrenador1 = new Entrenador();
-        entrenador1.setNombre("Carlos Rodríguez");
-        entrenador1.setEspecialidad("Yoga");
+        Entrenador entrenador1 = Entrenador.registrar("Carlos Rodríguez", Especialidad.YOGA);
         entrenadorRepository.save(entrenador1);
 
-        Entrenador entrenador2 = new Entrenador();
-        entrenador2.setNombre("Ana Martínez");
-        entrenador2.setEspecialidad("Spinning");
+        Entrenador entrenador2 = Entrenador.registrar("Ana Martínez", Especialidad.SPINNING);
         entrenadorRepository.save(entrenador2);
 
         System.out.println("Datos de ejemplo de Personal cargados exitosamente.");
