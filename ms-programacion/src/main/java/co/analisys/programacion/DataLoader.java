@@ -1,6 +1,8 @@
 package co.analisys.programacion;
 
+import co.analisys.programacion.model.Capacidad;
 import co.analisys.programacion.model.Clase;
+import co.analisys.programacion.model.EntrenadorId;
 import co.analisys.programacion.repository.ClaseRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
@@ -22,18 +24,12 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        Clase clase1 = new Clase();
-        clase1.setNombre("Yoga Matutino");
-        clase1.setHorario(LocalDateTime.now().plusDays(1).withHour(8).withMinute(0));
-        clase1.setCapacidadMaxima(20);
-        clase1.setEntrenadorId(1L);
+        Clase clase1 = Clase.programar("Yoga Matutino",
+                LocalDateTime.now().plusDays(1).withHour(8).withMinute(0), new Capacidad(20), new EntrenadorId(1L));
         claseRepository.save(clase1);
 
-        Clase clase2 = new Clase();
-        clase2.setNombre("Spinning Vespertino");
-        clase2.setHorario(LocalDateTime.now().plusDays(1).withHour(18).withMinute(0));
-        clase2.setCapacidadMaxima(15);
-        clase2.setEntrenadorId(2L);
+        Clase clase2 = Clase.programar("Spinning Vespertino",
+                LocalDateTime.now().plusDays(1).withHour(18).withMinute(0), new Capacidad(15), new EntrenadorId(2L));
         claseRepository.save(clase2);
 
         System.out.println("Datos de ejemplo de Programación cargados exitosamente.");

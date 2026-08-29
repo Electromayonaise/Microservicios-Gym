@@ -1,6 +1,7 @@
 package co.analisys.programacion.client;
 
 import co.analisys.programacion.dto.EntrenadorDTO;
+import co.analisys.programacion.model.EntrenadorId;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -22,16 +23,16 @@ public class PersonalClient {
         this.restClient = restClient;
     }
 
-    public EntrenadorDTO obtenerEntrenador(Long entrenadorId) {
+    public EntrenadorDTO obtenerEntrenador(EntrenadorId entrenadorId) {
         try {
             return restClient.get()
-                    .uri("/api/entrenadores/{id}", entrenadorId)
+                    .uri("/api/entrenadores/{id}", entrenadorId.getValor())
                     .retrieve()
                     .body(EntrenadorDTO.class);
         } catch (RestClientResponseException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "El entrenador " + entrenadorId + " no existe en ms-personal");
+                        "El entrenador " + entrenadorId.getValor() + " no existe en ms-personal");
             }
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "Error consultando ms-personal: " + e.getMessage());

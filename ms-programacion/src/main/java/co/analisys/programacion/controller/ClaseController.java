@@ -1,7 +1,9 @@
 package co.analisys.programacion.controller;
 
 import co.analisys.programacion.dto.ClaseDetalleDTO;
+import co.analisys.programacion.dto.ClaseRequest;
 import co.analisys.programacion.model.Clase;
+import co.analisys.programacion.model.ClaseId;
 import co.analisys.programacion.service.ClaseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -15,8 +17,8 @@ public class ClaseController {
     private ClaseService claseService;
 
     @PostMapping
-    public Clase programarClase(@RequestBody Clase clase) {
-        return claseService.programarClase(clase);
+    public Clase programarClase(@RequestBody ClaseRequest request) {
+        return claseService.programarClase(request);
     }
 
     @GetMapping
@@ -26,6 +28,6 @@ public class ClaseController {
 
     @GetMapping("/{id}/entrenador")
     public ClaseDetalleDTO obtenerClaseConEntrenador(@PathVariable Long id) {
-        return claseService.obtenerClaseConEntrenador(id);
+        return claseService.obtenerClaseConEntrenador(new ClaseId(id));
     }
 }
