@@ -74,6 +74,19 @@ Casos verificados: sin header `Authorization` → `401`; token inválido/expirad
 
 > ⚠️ Con esta seguridad activa, la colección de Postman existente necesita agregar el header `Authorization: Bearer <token>` a cada request — ya no funciona "tal cual" contra los endpoints protegidos.
 
+## Mensajería asíncrona: RabbitMQ
+
+Tres flujos de mensajería sobre RabbitMQ (diseño completo en
+[`docs/superpowers/specs/2026-09-14-rabbitmq-integracion-design.md`](docs/superpowers/specs/2026-09-14-rabbitmq-integracion-design.md)):
+
+| Flujo | Productor → Consumidor | Exchange / cola |
+|---|---|---|
+| Notificación de inscripción | `ms-membresias` → `ms-membresias` | `membresias.exchange` → `notificacion.inscripcion.queue` |
+| Pub/sub cambio de horario | `ms-programacion` → `ms-personal` | `programacion.exchange` → `horario.clase.queue` |
+| DLQ de pagos fallidos | `ms-membresias` → `ms-membresias` | `pagos.exchange` → `pagos.procesar.queue` (dead-letters a `pagos.dlx` → `pagos.dlq` si el monto es inválido) |
+
+`docker compose up` levanta también el contenedor `rabbitmq` (imagen `rabbitmq:3.13-management`). Consola de gestión: `http://localhost:15672` — `guest` / `guest`. Desde ahí se puede inspeccionar cada cola (mensajes pendientes, tasa de entrega) mientras se prueban los endpoints que publican eventos: `POST /api/miembros`, `PATCH /api/clases/{id}/horario`, `POST /api/miembros/{id}/pagos`.
+
 ## Documentación de la API (Swagger/OpenAPI)
 
 Cada microservicio expone su documentación sin necesidad de token en `http://localhost:<puerto>/swagger-ui/index.html` (JSON crudo en `/v3/api-docs`).
@@ -122,7 +135,7 @@ Con los 4 microservicios y Keycloak arriba (por cualquiera de las dos opciones),
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8082/api/clases/1/entrenador
 ```
 
-O importa [`postman/Gimnasio-Microservicios.postman_collection.json`](postman/Gimnasio-Microservicios.postman_collection.json) en Postman — trae una carpeta por microservicio con casos válidos y casos que verifican las invariantes de dominio (email inválido/duplicado, capacidad y cantidad negativas, especialidad fuera de catálogo, etc.). También se puede correr desde la terminal con [newman](https://github.com/postmanlabs/newman):
+O importa [`postman/Gimnasio-Microservicios.postman_collection.json`](postman/Gimnasio-Microservicios.postman_collection.json) en Postman — trae una carpeta por microservicio con casos válidos y casos que verifican las invariantes de dominio (email inválido/duplicado, capacidad y cantidad negativas, especialidad fuera de catálogo, etc.), más `1. Seguridad (JWT)` (casos 401/403) y `2. RabbitMQ` (dispara cada flujo de mensajería y verifica contra la Management API de RabbitMQ que el mensaje pasó por la cola esperada, incluyendo el camino que cae a la DLQ de pagos). También se puede correr desde la terminal con [newman](https://github.com/postmanlabs/newman):
 
 ```bash
 newman run postman/Gimnasio-Microservicios.postman_collection.json
