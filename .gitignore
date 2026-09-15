@@ -11,3 +11,6 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+
+# Superpowers scratch workspace (SDD ledgers, briefs, review packages)
+.superpowers/
