@@ -728,7 +728,7 @@
                   "});",
                   "const body = pm.response.json();",
                   "pm.test('El pago invalido quedo en la Dead Letter Queue', function () {",
-                  "    pm.expect(body.messages_ready).to.be.at.least(1);",
+                  "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
                   "});"
                 ]
               }
