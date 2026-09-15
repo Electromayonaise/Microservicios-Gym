@@ -3,6 +3,11 @@ services:
     build: ./ms-personal
     ports:
       - "8083:8083"
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     healthcheck:
       # /api/entrenadores ahora requiere JWT; se usa /v3/api-docs (público,
       # expuesto por springdoc) solo para confirmar que la app arrancó.
@@ -16,6 +21,11 @@ services:
     build: ./ms-membresias
     ports:
       - "8081:8081"
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/v3/api-docs"]
       interval: 5s
@@ -42,8 +52,11 @@ services:
       # Dentro de la red de docker-compose, ms-personal se resuelve por el
       # nombre del servicio en vez de localhost.
       PERSONAL_SERVICE_URL: http://ms-personal:8083
+      SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       ms-personal:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8082/v3/api-docs"]
@@ -78,3 +91,23 @@ services:
     volumes:
       - ./keycloak/full-export/gimnasio-realm.json:/opt/keycloak/data/import/gimnasio-realm.json:ro
       - ./keycloak/full-export/gimnasio-users-0.json:/opt/keycloak/data/import/gimnasio-users-0.json:ro
+
+  # RabbitMQ - broker de mensajeria para las notificaciones asincronas de
+  # inscripcion, el patron publish/subscribe de cambios de horario y la
+  # Dead Letter Queue de pagos fallidos (ver
+  # docs/superpowers/specs/2026-09-14-rabbitmq-integracion-design.md). La
+  # imagen "-management" trae el plugin de consola/API de gestion en el
+  # puerto 15672, usado tambien desde la coleccion de Postman para
+  # verificar que los mensajes efectivamente pasaron por cada cola.
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq_gym_app
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
