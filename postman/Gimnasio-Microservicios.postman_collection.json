@@ -2,16 +2,296 @@
   "info": {
     "_postman_id": "9a2f8f4a-9c3e-4a7b-8f2b-6a2b7c8e2b10",
     "name": "Gimnasio - Microservicios",
-    "description": "Pruebas de los 4 microservicios del taller (ms-membresias, ms-programacion, ms-personal, ms-inventario). Cada microservicio tiene su propia carpeta con casos válidos y casos que verifican las invariantes de dominio (Value Objects, factory methods, enum de especialidad, etc). Antes de correr la carpeta ms-programacion, ms-personal debe estar levantado, porque ms-programacion valida entrenadorId contra el contexto Personal por REST. Las pruebas asumen una base H2 en memoria recién arrancada (DataLoader sembrando los ids 1 y 2 en cada servicio).",
+    "description": "Pruebas de los 4 microservicios del taller (ms-membresias, ms-programacion, ms-personal, ms-inventario), ahora protegidos con JWT emitido por Keycloak (realm 'gimnasio') y autorizacion por rol (ROLE_ADMIN, ROLE_TRAINER, ROLE_MEMBER). IMPORTANTE: antes de correr cualquier otra carpeta, corre la carpeta '0. Auth' completa (o la coleccion entera de una sola vez con Collection Runner / newman) para obtener y guardar los tokens admin_token, trainer_token y member_token que usan el resto de los requests. Requiere Keycloak levantado (docker compose up -d keycloak) y, para ms-programacion, que ms-personal este levantado, porque valida entrenadorId contra ese contexto por REST reenviando el token del usuario. Las pruebas de dominio asumen una base H2 en memoria recien arrancada (DataLoader sembrando los ids 1 y 2 en cada servicio).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "ms_membresias_url", "value": "http://localhost:8081" },
     { "key": "ms_programacion_url", "value": "http://localhost:8082" },
     { "key": "ms_personal_url", "value": "http://localhost:8083" },
-    { "key": "ms_inventario_url", "value": "http://localhost:8084" }
+    { "key": "ms_inventario_url", "value": "http://localhost:8084" },
+    { "key": "keycloak_url", "value": "http://localhost:8080" },
+    { "key": "realm", "value": "gimnasio" },
+    { "key": "gym_client_id", "value": "membresias-service" },
+    { "key": "gym_client_secret", "value": "07ec89b0cc5e358114c08e9fd7e20ee6" },
+    { "key": "admin_token", "value": "" },
+    { "key": "trainer_token", "value": "" },
+    { "key": "member_token", "value": "" }
   ],
   "item": [
+    {
+      "name": "0. Auth",
+      "description": "Obtiene un token JWT de Keycloak por cada rol de prueba (admin1/ROLE_ADMIN, trainer1/ROLE_TRAINER, member1/ROLE_MEMBER) y lo guarda en las variables de coleccion admin_token/trainer_token/member_token. El client_id/secret usado (membresias-service) es indiferente para validar en los otros microservicios: los roles son de realm, no de cliente, y ninguno de los resource servers valida el 'aud' del token.",
+      "item": [
+        {
+          "name": "POST Obtener token ADMIN (admin1)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "password", "type": "text" },
+                { "key": "client_id", "value": "{{gym_client_id}}", "type": "text" },
+                { "key": "client_secret", "value": "{{gym_client_secret}}", "type": "text" },
+                { "key": "username", "value": "admin1", "type": "text" },
+                { "key": "password", "value": "Admin@2024", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token",
+              "host": ["{{keycloak_url}}"],
+              "path": ["realms", "{{realm}}", "protocol", "openid-connect", "token"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (token obtenido)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('La respuesta incluye access_token', function () {",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "});",
+                  "pm.collectionVariables.set('admin_token', body.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Obtener token TRAINER (trainer1)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "password", "type": "text" },
+                { "key": "client_id", "value": "{{gym_client_id}}", "type": "text" },
+                { "key": "client_secret", "value": "{{gym_client_secret}}", "type": "text" },
+                { "key": "username", "value": "trainer1", "type": "text" },
+                { "key": "password", "value": "Trainer@2024", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token",
+              "host": ["{{keycloak_url}}"],
+              "path": ["realms", "{{realm}}", "protocol", "openid-connect", "token"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (token obtenido)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('La respuesta incluye access_token', function () {",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "});",
+                  "pm.collectionVariables.set('trainer_token', body.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Obtener token MEMBER (member1)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "password", "type": "text" },
+                { "key": "client_id", "value": "{{gym_client_id}}", "type": "text" },
+                { "key": "client_secret", "value": "{{gym_client_secret}}", "type": "text" },
+                { "key": "username", "value": "member1", "type": "text" },
+                { "key": "password", "value": "Member@2024", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token",
+              "host": ["{{keycloak_url}}"],
+              "path": ["realms", "{{realm}}", "protocol", "openid-connect", "token"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (token obtenido)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('La respuesta incluye access_token', function () {",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "});",
+                  "pm.collectionVariables.set('member_token', body.access_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Seguridad (JWT)",
+      "description": "Casos de la instruccion 'Pruebas de Seguridad': acceso sin token, con token invalido, y con un rol que no tiene permiso sobre el endpoint.",
+      "item": [
+        {
+          "name": "GET Listar miembros SIN token -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 401 (sin credenciales)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Listar miembros con token invalido -> 401",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer token.invalido.123" }],
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 401 (token malformado/invalido)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Listar miembros con rol MEMBER -> 403 (requiere ADMIN o TRAINER)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{member_token}}" }],
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 403 (rol MEMBER sin permiso)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Agregar equipo con rol MEMBER -> 403 (requiere ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{member_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Equipo no autorizado\",\n    \"descripcion\": \"prueba\",\n    \"cantidad\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_inventario_url}}/api/equipos",
+              "host": ["{{ms_inventario_url}}"],
+              "path": ["api", "equipos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 403 (rol MEMBER sin permiso)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Programar clase con rol MEMBER -> 403 (requiere ADMIN o TRAINER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{member_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Clase no autorizada\",\n    \"horario\": \"2026-09-10T19:00:00\",\n    \"capacidadMaxima\": 10,\n    \"entrenadorId\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 403 (rol MEMBER sin permiso)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
     {
       "name": "ms-membresias",
       "item": [
@@ -19,7 +299,7 @@
           "name": "GET Listar miembros",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "Authorization", "value": "Bearer {{trainer_token}}" }],
             "url": {
               "raw": "{{ms_membresias_url}}/api/miembros",
               "host": ["{{ms_membresias_url}}"],
@@ -47,7 +327,10 @@
           "name": "POST Registrar miembro - valido",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Pedro Ruiz\",\n    \"email\": \"pedro.ruiz+{{$timestamp}}@email.com\"\n}",
@@ -84,7 +367,10 @@
           "name": "POST Registrar miembro - email con formato invalido",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Formato Malo\",\n    \"email\": \"no-es-un-email\"\n}",
@@ -117,7 +403,10 @@
           "name": "POST Registrar miembro - email duplicado",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Otro Juan\",\n    \"email\": \"juan@email.com\"\n}",
@@ -147,7 +436,10 @@
           "name": "POST Registrar miembro - nombre vacio",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"\",\n    \"email\": \"vacio@email.com\"\n}",
@@ -182,7 +474,7 @@
           "name": "GET Listar clases",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "Authorization", "value": "Bearer {{member_token}}" }],
             "url": {
               "raw": "{{ms_programacion_url}}/api/clases",
               "host": ["{{ms_programacion_url}}"],
@@ -210,7 +502,10 @@
           "name": "POST Programar clase - valido",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{trainer_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Crossfit Night\",\n    \"horario\": \"2026-09-10T19:00:00\",\n    \"capacidadMaxima\": 12,\n    \"entrenadorId\": 1\n}",
@@ -244,7 +539,10 @@
           "name": "POST Programar clase - capacidadMaxima invalida",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{trainer_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Clase sin cupo\",\n    \"horario\": \"2026-09-10T19:00:00\",\n    \"capacidadMaxima\": 0,\n    \"entrenadorId\": 1\n}",
@@ -277,7 +575,10 @@
           "name": "POST Programar clase - entrenadorId inexistente",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{trainer_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Clase huerfana\",\n    \"horario\": \"2026-09-10T19:00:00\",\n    \"capacidadMaxima\": 10,\n    \"entrenadorId\": 9999\n}",
@@ -307,7 +608,7 @@
           "name": "GET Detalle de clase con entrenador",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "Authorization", "value": "Bearer {{member_token}}" }],
             "url": {
               "raw": "{{ms_programacion_url}}/api/clases/1/entrenador",
               "host": ["{{ms_programacion_url}}"],
@@ -320,7 +621,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code es 200 (comunicacion cruzada con ms-personal)', function () {",
+                  "pm.test('Status code es 200 (comunicacion cruzada con ms-personal, reenviando el JWT)', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
                   "const body = pm.response.json();",
@@ -342,7 +643,7 @@
           "name": "GET Listar entrenadores",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "Authorization", "value": "Bearer {{member_token}}" }],
             "url": {
               "raw": "{{ms_personal_url}}/api/entrenadores",
               "host": ["{{ms_personal_url}}"],
@@ -370,7 +671,7 @@
           "name": "GET Entrenador por id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "Authorization", "value": "Bearer {{member_token}}" }],
             "url": {
               "raw": "{{ms_personal_url}}/api/entrenadores/1",
               "host": ["{{ms_personal_url}}"],
@@ -398,7 +699,7 @@
           "name": "GET Entrenador por id inexistente",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "Authorization", "value": "Bearer {{member_token}}" }],
             "url": {
               "raw": "{{ms_personal_url}}/api/entrenadores/9999",
               "host": ["{{ms_personal_url}}"],
@@ -423,7 +724,10 @@
           "name": "POST Registrar entrenador - valido",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Laura Sanchez\",\n    \"especialidad\": \"pilates\"\n}",
@@ -456,7 +760,10 @@
           "name": "POST Registrar entrenador - especialidad fuera de catalogo",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Entrenador Invalido\",\n    \"especialidad\": \"Baile Moderno\"\n}",
@@ -489,7 +796,10 @@
           "name": "POST Registrar entrenador - nombre vacio",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"\",\n    \"especialidad\": \"yoga\"\n}",
@@ -524,7 +834,7 @@
           "name": "GET Listar equipos",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "Authorization", "value": "Bearer {{member_token}}" }],
             "url": {
               "raw": "{{ms_inventario_url}}/api/equipos",
               "host": ["{{ms_inventario_url}}"],
@@ -552,7 +862,10 @@
           "name": "POST Agregar equipo - valido",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Kettlebell 16kg\",\n    \"descripcion\": \"Pesa rusa\",\n    \"cantidad\": 10\n}",
@@ -585,7 +898,10 @@
           "name": "POST Agregar equipo - cantidad negativa",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"nombre\": \"Equipo danado\",\n    \"descripcion\": \"prueba\",\n    \"cantidad\": -5\n}",
