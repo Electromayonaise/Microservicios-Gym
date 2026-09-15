@@ -141,4 +141,4 @@ O importa [`postman/Gimnasio-Microservicios.postman_collection.json`](postman/Gi
 newman run postman/Gimnasio-Microservicios.postman_collection.json --delay-request 6000
 ```
 
-`--delay-request 6000` adds a 6s pause before every request; combined with the collection's own 1.5s pre-request wait before each RabbitMQ Management API check, this gives the queue-stats aggregator (which refreshes on a ~5s interval) enough margin to reflect the latest delivery before the assertion runs. A shorter delay (e.g. 2s) was tried and reproducibly failed: the ~3.5s total gap it produced was still short of the 5s aggregation interval.
+`--delay-request 6000` agrega una pausa de 6s antes de cada request; combinado con la espera de 1.5s que ya trae la colección antes de cada chequeo contra la Management API de RabbitMQ, esto le da al agregador de estadísticas de las colas (que refresca cada ~5s) suficiente margen para reflejar la última entrega antes de que corra la aserción. Se probó un delay más corto (2s) y falló de forma reproducible: los ~3.5s de margen total que generaba seguían siendo menos que el intervalo de agregación de 5s.
