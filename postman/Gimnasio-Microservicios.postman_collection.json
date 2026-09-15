@@ -617,6 +617,49 @@
           ]
         },
         {
+          "name": "GET Verificar cola pagos.procesar.queue proceso el pago valido",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmq_user}}" },
+                { "key": "password", "value": "{{rabbitmq_password}}" }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{rabbitmq_mgmt_url}}/api/queues/%2F/pagos.procesar.queue",
+              "host": ["{{rabbitmq_mgmt_url}}"],
+              "path": ["api", "queues", "%2F", "pagos.procesar.queue"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["setTimeout(function () {}, 1500);"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (cola existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('La cola de pagos entrego el mensaje al listener', function () {",
+                  "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "GET Verificar pago valido no cayo a la DLQ",
           "request": {
             "method": "GET",
@@ -651,8 +694,9 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "const body = pm.response.json();",
-                  "pm.test('El pago valido no genero mensajes en la DLQ', function () {",
-                  "    pm.expect(body.messages_ready).to.eql(0);",
+                  "const deliverGet = (body.message_stats && body.message_stats.deliver_get) || 0;",
+                  "pm.test('El pago valido no genero entregas en la DLQ', function () {",
+                  "    pm.expect(deliverGet).to.eql(0);",
                   "});"
                 ]
               }

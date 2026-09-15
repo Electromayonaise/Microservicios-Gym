@@ -14,6 +14,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMQConfig {
 
+    // PROGRAMACION_EXCHANGE y CLASE_HORARIO_CAMBIADO_ROUTING_KEY deben coincidir
+    // exactamente con las mismas constantes en
+    // ms-programacion/.../config/RabbitMQConfig.java — no hay modulo compartido.
     public static final String PROGRAMACION_EXCHANGE = "programacion.exchange";
     public static final String HORARIO_CLASE_QUEUE = "horario.clase.queue";
     public static final String CLASE_HORARIO_CAMBIADO_ROUTING_KEY = "clase.horario.cambiado";
@@ -43,6 +46,7 @@ public class RabbitMQConfig {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(messageConverter());
+        factory.setDefaultRequeueRejected(false);
         return factory;
     }
 }
