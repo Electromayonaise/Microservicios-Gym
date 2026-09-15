@@ -14,3 +14,6 @@ Thumbs.db
 
 # Superpowers scratch workspace (SDD ledgers, briefs, review packages)
 .superpowers/
+
+# Superpowers plans/specs (working docs, not project documentation)
+docs/superpowers/
