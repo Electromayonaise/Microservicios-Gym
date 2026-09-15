@@ -16,7 +16,10 @@
     { "key": "gym_client_secret", "value": "07ec89b0cc5e358114c08e9fd7e20ee6" },
     { "key": "admin_token", "value": "" },
     { "key": "trainer_token", "value": "" },
-    { "key": "member_token", "value": "" }
+    { "key": "member_token", "value": "" },
+    { "key": "rabbitmq_mgmt_url", "value": "http://localhost:15672" },
+    { "key": "rabbitmq_user", "value": "guest" },
+    { "key": "rabbitmq_password", "value": "guest" }
   ],
   "item": [
     {
@@ -284,6 +287,91 @@
                 "exec": [
                   "pm.test('Status code es 403 (rol MEMBER sin permiso)', function () {",
                   "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. RabbitMQ",
+      "description": "Dispara cada flujo de mensajeria y verifica contra la Management HTTP API de RabbitMQ (puerto 15672) que el mensaje efectivamente proceso por la cola esperada. Requiere que ademas de los microservicios y Keycloak este arriba el contenedor 'rabbitmq' (ver docker-compose.yml). Cada request de verificacion espera ~1.5s en su pre-request script para dar tiempo al listener a procesar antes de leer las estadisticas de la cola.",
+      "item": [
+        {
+          "name": "POST Registrar miembro - dispara notificacion de inscripcion",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Rabbit Test\",\n    \"email\": \"rabbit.test+{{$timestamp}}@email.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (miembro registrado)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Verificar cola notificacion.inscripcion.queue proceso el mensaje",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmq_user}}" },
+                { "key": "password", "value": "{{rabbitmq_password}}" }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{rabbitmq_mgmt_url}}/api/queues/%2F/notificacion.inscripcion.queue",
+              "host": ["{{rabbitmq_mgmt_url}}"],
+              "path": ["api", "queues", "%2F", "notificacion.inscripcion.queue"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["setTimeout(function () {}, 1500);"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (cola existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('El listener ya proceso el mensaje (no quedan pendientes)', function () {",
+                  "    pm.expect(body.messages_ready).to.eql(0);",
+                  "});",
+                  "pm.test('La cola entrego al menos un mensaje al listener', function () {",
+                  "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
                   "});"
                 ]
               }
