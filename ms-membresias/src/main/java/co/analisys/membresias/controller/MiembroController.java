@@ -1,11 +1,14 @@
 package co.analisys.membresias.controller;
 
 import co.analisys.membresias.dto.MiembroRequest;
+import co.analisys.membresias.dto.PagoRequest;
 import co.analisys.membresias.model.Miembro;
 import co.analisys.membresias.service.MiembroService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,5 +37,17 @@ public class MiembroController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_TRAINER')")
     public List<Miembro> obtenerTodosMiembros() {
         return miembroService.obtenerTodosMiembros();
+    }
+
+    @Operation(
+        summary = "Registrar un pago",
+        description = "Encola el pago de un miembro para procesamiento asincrono via RabbitMQ. Un monto invalido cae a la Dead Letter Queue de pagos.")
+    @PostMapping("/{id}/pagos")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MEMBER')")
+    public void registrarPago(
+            @Parameter(description = "Identificador del miembro") @PathVariable Long id,
+            @RequestBody PagoRequest request) {
+        miembroService.registrarPago(id, request.monto(), request.concepto());
     }
 }

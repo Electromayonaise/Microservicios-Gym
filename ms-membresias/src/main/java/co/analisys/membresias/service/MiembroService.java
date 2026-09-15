@@ -2,6 +2,7 @@ package co.analisys.membresias.service;
 
 import co.analisys.membresias.config.RabbitMQConfig;
 import co.analisys.membresias.messaging.dto.InscripcionNotificacionDTO;
+import co.analisys.membresias.messaging.dto.PagoDTO;
 import co.analisys.membresias.model.Email;
 import co.analisys.membresias.model.Miembro;
 import co.analisys.membresias.repository.MiembroRepository;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -38,5 +40,13 @@ public class MiembroService {
 
     public List<Miembro> obtenerTodosMiembros() {
         return miembroRepository.findAll();
+    }
+
+    public void registrarPago(Long miembroId, BigDecimal monto, String concepto) {
+        if (!miembroRepository.existsById(miembroId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Miembro no encontrado: " + miembroId);
+        }
+        PagoDTO pago = new PagoDTO(miembroId, monto, concepto);
+        rabbitTemplate.convertAndSend(RabbitMQConfig.PAGOS_EXCHANGE, RabbitMQConfig.PAGO_PROCESAR_ROUTING_KEY, pago);
     }
 }

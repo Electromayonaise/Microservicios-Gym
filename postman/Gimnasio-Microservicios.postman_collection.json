@@ -355,6 +355,69 @@
               }
             }
           ]
+        },
+        {
+          "name": "POST Registrar pago SIN token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"monto\": 50000,\n    \"concepto\": \"Mensualidad\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros/1/pagos",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros", "1", "pagos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 401 (sin credenciales)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar pago con rol TRAINER -> 403 (requiere ADMIN o MEMBER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{trainer_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"monto\": 50000,\n    \"concepto\": \"Mensualidad\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros/1/pagos",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros", "1", "pagos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 403 (rol TRAINER sin permiso)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -514,6 +577,158 @@
                   "});",
                   "pm.test('La cola entrego al menos un mensaje al listener', function () {",
                   "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar pago valido - se procesa sin caer a la DLQ",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{member_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"monto\": 50000,\n    \"concepto\": \"Mensualidad\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros/1/pagos",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros", "1", "pagos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 202 (pago encolado)', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Verificar pago valido no cayo a la DLQ",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmq_user}}" },
+                { "key": "password", "value": "{{rabbitmq_password}}" }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{rabbitmq_mgmt_url}}/api/queues/%2F/pagos.dlq",
+              "host": ["{{rabbitmq_mgmt_url}}"],
+              "path": ["api", "queues", "%2F", "pagos.dlq"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["setTimeout(function () {}, 1500);"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (cola DLQ existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('El pago valido no genero mensajes en la DLQ', function () {",
+                  "    pm.expect(body.messages_ready).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar pago con monto invalido - cae a la DLQ",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{member_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"monto\": -100,\n    \"concepto\": \"Mensualidad\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros/1/pagos",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros", "1", "pagos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 202 (pago encolado, la validacion de monto es asincrona)', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Verificar pago invalido cayo a la DLQ",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmq_user}}" },
+                { "key": "password", "value": "{{rabbitmq_password}}" }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{rabbitmq_mgmt_url}}/api/queues/%2F/pagos.dlq",
+              "host": ["{{rabbitmq_mgmt_url}}"],
+              "path": ["api", "queues", "%2F", "pagos.dlq"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["setTimeout(function () {}, 1500);"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (cola DLQ existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('El pago invalido quedo en la Dead Letter Queue', function () {",
+                  "    pm.expect(body.messages_ready).to.be.at.least(1);",
                   "});"
                 ]
               }

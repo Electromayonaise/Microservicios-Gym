@@ -2,7 +2,9 @@ package co.analisys.membresias.config;
 
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -19,6 +21,13 @@ public class RabbitMQConfig {
     public static final String NOTIFICACION_INSCRIPCION_QUEUE = "notificacion.inscripcion.queue";
     public static final String MIEMBRO_INSCRITO_ROUTING_KEY = "miembro.inscrito";
 
+    public static final String PAGOS_EXCHANGE = "pagos.exchange";
+    public static final String PAGOS_DLX = "pagos.dlx";
+    public static final String PAGOS_PROCESAR_QUEUE = "pagos.procesar.queue";
+    public static final String PAGOS_DLQ = "pagos.dlq";
+    public static final String PAGO_PROCESAR_ROUTING_KEY = "pago.procesar";
+    public static final String PAGO_FALLIDO_ROUTING_KEY = "pago.fallido";
+
     @Bean
     public TopicExchange membresiasExchange() {
         return new TopicExchange(MEMBRESIAS_EXCHANGE);
@@ -32,6 +41,39 @@ public class RabbitMQConfig {
     @Bean
     public Binding notificacionInscripcionBinding(Queue notificacionInscripcionQueue, TopicExchange membresiasExchange) {
         return BindingBuilder.bind(notificacionInscripcionQueue).to(membresiasExchange).with(MIEMBRO_INSCRITO_ROUTING_KEY);
+    }
+
+    @Bean
+    public DirectExchange pagosExchange() {
+        return new DirectExchange(PAGOS_EXCHANGE);
+    }
+
+    @Bean
+    public DirectExchange pagosDlx() {
+        return new DirectExchange(PAGOS_DLX);
+    }
+
+    @Bean
+    public Queue pagosProcesarQueue() {
+        return QueueBuilder.durable(PAGOS_PROCESAR_QUEUE)
+                .withArgument("x-dead-letter-exchange", PAGOS_DLX)
+                .withArgument("x-dead-letter-routing-key", PAGO_FALLIDO_ROUTING_KEY)
+                .build();
+    }
+
+    @Bean
+    public Queue pagosDlq() {
+        return new Queue(PAGOS_DLQ, true);
+    }
+
+    @Bean
+    public Binding pagosProcesarBinding(Queue pagosProcesarQueue, DirectExchange pagosExchange) {
+        return BindingBuilder.bind(pagosProcesarQueue).to(pagosExchange).with(PAGO_PROCESAR_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding pagosDlqBinding(Queue pagosDlq, DirectExchange pagosDlx) {
+        return BindingBuilder.bind(pagosDlq).to(pagosDlx).with(PAGO_FALLIDO_ROUTING_KEY);
     }
 
     @Bean
