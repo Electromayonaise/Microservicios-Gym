@@ -1,0 +1,8 @@
+# Force LF for POSIX shell scripts, regardless of core.autocrlf on checkout.
+# Without this, Windows checkouts with autocrlf=true corrupt mvnw's shebang
+# (CRLF), breaking `./mvnw` when it's COPY'd into a Linux Docker build stage.
+mvnw text eol=lf
+*.sh text eol=lf
+
+# Windows batch launcher keeps CRLF.
+mvnw.cmd text eol=crlf
