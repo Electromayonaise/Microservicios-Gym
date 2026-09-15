@@ -292,6 +292,69 @@
               }
             }
           ]
+        },
+        {
+          "name": "PATCH Cambiar horario de clase SIN token -> 401",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nuevoHorario\": \"2026-09-20T09:00:00\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases/1/horario",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases", "1", "horario"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 401 (sin credenciales)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH Cambiar horario de clase con rol MEMBER -> 403 (requiere ADMIN o TRAINER)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{member_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nuevoHorario\": \"2026-09-20T09:00:00\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases/1/horario",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases", "1", "horario"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 403 (rol MEMBER sin permiso)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -348,6 +411,85 @@
               "raw": "{{rabbitmq_mgmt_url}}/api/queues/%2F/notificacion.inscripcion.queue",
               "host": ["{{rabbitmq_mgmt_url}}"],
               "path": ["api", "queues", "%2F", "notificacion.inscripcion.queue"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["setTimeout(function () {}, 1500);"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (cola existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('El listener ya proceso el mensaje (no quedan pendientes)', function () {",
+                  "    pm.expect(body.messages_ready).to.eql(0);",
+                  "});",
+                  "pm.test('La cola entrego al menos un mensaje al listener', function () {",
+                  "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH Cambiar horario de clase - dispara evento pub/sub",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{trainer_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nuevoHorario\": \"2026-09-20T09:00:00\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases/1/horario",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases", "1", "horario"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (horario actualizado)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Verificar cola horario.clase.queue proceso el mensaje",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmq_user}}" },
+                { "key": "password", "value": "{{rabbitmq_password}}" }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{rabbitmq_mgmt_url}}/api/queues/%2F/horario.clase.queue",
+              "host": ["{{rabbitmq_mgmt_url}}"],
+              "path": ["api", "queues", "%2F", "horario.clase.queue"]
             }
           },
           "event": [

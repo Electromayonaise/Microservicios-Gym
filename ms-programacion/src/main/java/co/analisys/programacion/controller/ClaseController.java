@@ -1,5 +1,6 @@
 package co.analisys.programacion.controller;
 
+import co.analisys.programacion.dto.CambioHorarioRequest;
 import co.analisys.programacion.dto.ClaseDetalleDTO;
 import co.analisys.programacion.dto.ClaseRequest;
 import co.analisys.programacion.model.Clase;
@@ -47,5 +48,16 @@ public class ClaseController {
     public ClaseDetalleDTO obtenerClaseConEntrenador(
             @Parameter(description = "Identificador de la clase") @PathVariable Long id) {
         return claseService.obtenerClaseConEntrenador(new ClaseId(id));
+    }
+
+    @Operation(
+        summary = "Cambiar el horario de una clase",
+        description = "Reprograma una clase existente y publica un evento pub/sub (clase.horario.cambiado) para que ms-personal notifique al entrenador asignado.")
+    @PatchMapping("/{id}/horario")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_TRAINER')")
+    public Clase cambiarHorario(
+            @Parameter(description = "Identificador de la clase") @PathVariable Long id,
+            @RequestBody CambioHorarioRequest request) {
+        return claseService.cambiarHorario(new ClaseId(id), request.nuevoHorario());
     }
 }

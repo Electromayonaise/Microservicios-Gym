@@ -51,4 +51,11 @@ public class Clase {
         }
         return new Clase(nombre, horario, capacidadMaxima, entrenadorId);
     }
+
+    public void reprogramar(LocalDateTime nuevoHorario) {
+        if (nuevoHorario == null) {
+            throw new IllegalArgumentException("El nuevo horario no puede ser nulo");
+        }
+        this.horario = nuevoHorario;
+    }
 }
