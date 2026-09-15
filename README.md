@@ -138,7 +138,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8082/api/clases/1/entren
 O importa [`postman/Gimnasio-Microservicios.postman_collection.json`](postman/Gimnasio-Microservicios.postman_collection.json) en Postman — trae una carpeta por microservicio con casos válidos y casos que verifican las invariantes de dominio (email inválido/duplicado, capacidad y cantidad negativas, especialidad fuera de catálogo, etc.), más `1. Seguridad (JWT)` (casos 401/403) y `2. RabbitMQ` (dispara cada flujo de mensajería y verifica contra la Management API de RabbitMQ que el mensaje pasó por la cola esperada, incluyendo el camino que cae a la DLQ de pagos). También se puede correr desde la terminal con [newman](https://github.com/postmanlabs/newman):
 
 ```bash
-newman run postman/Gimnasio-Microservicios.postman_collection.json --delay-request 2000
+newman run postman/Gimnasio-Microservicios.postman_collection.json --delay-request 6000
 ```
 
-`--delay-request 2000` adds a 2s pause before every request; combined with the collection's own pre-request waits before each RabbitMQ Management API check, this gives the queue-stats aggregator (which refreshes on a ~5s interval) enough margin to reflect the latest delivery before the assertion runs.
+`--delay-request 6000` adds a 6s pause before every request; combined with the collection's own 1.5s pre-request wait before each RabbitMQ Management API check, this gives the queue-stats aggregator (which refreshes on a ~5s interval) enough margin to reflect the latest delivery before the assertion runs. A shorter delay (e.g. 2s) was tried and reproducibly failed: the ~3.5s total gap it produced was still short of the 5s aggregation interval.
