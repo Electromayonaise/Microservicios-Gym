@@ -1,5 +1,6 @@
 package co.analisys.membresias.controller;
 
+import co.analisys.membresias.dto.EntrenamientoRequest;
 import co.analisys.membresias.dto.MiembroRequest;
 import co.analisys.membresias.dto.PagoRequest;
 import co.analisys.membresias.model.Miembro;
@@ -49,5 +50,17 @@ public class MiembroController {
             @Parameter(description = "Identificador del miembro") @PathVariable Long id,
             @RequestBody PagoRequest request) {
         miembroService.registrarPago(id, request.monto(), request.concepto());
+    }
+
+    @Operation(
+        summary = "Registrar una sesion de entrenamiento",
+        description = "Publica un dato de entrenamiento (topic datos-entrenamiento) que Kafka Streams agrega en ventanas de 5 minutos y resume en el topic entrenamiento-resumen.")
+    @PostMapping("/{id}/entrenamientos")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MEMBER')")
+    public void registrarEntrenamiento(
+            @Parameter(description = "Identificador del miembro") @PathVariable Long id,
+            @RequestBody EntrenamientoRequest request) {
+        miembroService.registrarEntrenamiento(id, request.duracionMinutos(), request.calorias());
     }
 }
