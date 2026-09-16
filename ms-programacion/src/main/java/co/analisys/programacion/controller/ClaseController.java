@@ -3,6 +3,7 @@ package co.analisys.programacion.controller;
 import co.analisys.programacion.dto.CambioHorarioRequest;
 import co.analisys.programacion.dto.ClaseDetalleDTO;
 import co.analisys.programacion.dto.ClaseRequest;
+import co.analisys.programacion.dto.OcupacionRequest;
 import co.analisys.programacion.model.Clase;
 import co.analisys.programacion.model.ClaseId;
 import co.analisys.programacion.service.ClaseService;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -59,5 +61,17 @@ public class ClaseController {
             @Parameter(description = "Identificador de la clase") @PathVariable Long id,
             @RequestBody CambioHorarioRequest request) {
         return claseService.cambiarHorario(new ClaseId(id), request.nuevoHorario());
+    }
+
+    @Operation(
+        summary = "Reportar ocupacion actual de una clase",
+        description = "Publica un evento de ocupacion en tiempo real (topic ocupacion-clases) para el dashboard de monitoreo. No persiste la ocupacion en la clase.")
+    @PostMapping("/{id}/ocupacion")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_TRAINER')")
+    public void reportarOcupacion(
+            @Parameter(description = "Identificador de la clase") @PathVariable Long id,
+            @RequestBody OcupacionRequest request) {
+        claseService.reportarOcupacion(new ClaseId(id), request.ocupacionActual());
     }
 }
