@@ -23,8 +23,11 @@ services:
       - "8081:8081"
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/v3/api-docs"]
@@ -53,10 +56,13 @@ services:
       # nombre del servicio en vez de localhost.
       PERSONAL_SERVICE_URL: http://ms-personal:8083
       SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       ms-personal:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8082/v3/api-docs"]
@@ -111,3 +117,50 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  # Kafka - streaming de eventos para el reporte de ocupacion de clases en
+  # tiempo real y el analisis de datos de entrenamiento de miembros (ver
+  # docs/superpowers/specs/2026-09-15-kafka-integracion-design.md). Modo
+  # KRaft (sin Zookeeper), un solo broker, con dos listeners: uno interno
+  # (kafka:9092) usado por los microservicios y kafka-ui dentro de la red
+  # de Docker, y uno externo (localhost:9092, publicado desde el puerto de
+  # contenedor 9093) para cuando los microservicios corren fuera de Docker
+  # via Maven (Opcion 2 del README).
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka_gym_app
+    ports:
+      - "9092:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: CONTROLLER://kafka:9094,PLAINTEXT://kafka:9092,PLAINTEXT_HOST://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9094'
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # Kafka UI (Provectus) - consola web para inspeccionar topics, particiones,
+  # mensajes y el offset commiteado de cada consumer group. Tambien usada
+  # desde la coleccion de Postman (carpeta "3. Kafka") via su REST API para
+  # verificar que cada flujo efectivamente avanzo el offset esperado.
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka_ui_gym_app
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
