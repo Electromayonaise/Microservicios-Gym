@@ -64,6 +64,11 @@ public class MiembroService {
             throw new IllegalArgumentException("La duracion y las calorias deben ser mayores a cero");
         }
         DatoEntrenamientoEvento dato = new DatoEntrenamientoEvento(miembroId, duracionMinutos, calorias, Instant.now());
-        kafkaTemplate.send(KafkaProducerConfig.DATOS_ENTRENAMIENTO_TOPIC, miembroId.toString(), dato);
+        kafkaTemplate.send(KafkaProducerConfig.DATOS_ENTRENAMIENTO_TOPIC, miembroId.toString(), dato)
+                .whenComplete((resultado, error) -> {
+                    if (error != null) {
+                        System.out.println("Error al publicar dato de entrenamiento para miembro " + miembroId + ": " + error.getMessage());
+                    }
+                });
     }
 }

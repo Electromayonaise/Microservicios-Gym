@@ -6,6 +6,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -17,6 +18,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
 import org.springframework.kafka.annotation.KafkaStreamsDefaultConfiguration;
 import org.springframework.kafka.config.KafkaStreamsConfiguration;
+import org.springframework.kafka.config.StreamsBuilderFactoryBeanConfigurer;
 import org.springframework.kafka.support.serializer.JsonSerde;
 
 import java.time.Duration;
@@ -41,6 +43,14 @@ public class KafkaStreamsConfig {
     }
 
     @Bean
+    public StreamsBuilderFactoryBeanConfigurer streamsUncaughtExceptionHandlerConfigurer() {
+        return factoryBean -> factoryBean.setStreamsUncaughtExceptionHandler(exception -> {
+            System.out.println("Kafka Streams (ms-membresias-streams): excepcion no capturada en el hilo, se reemplaza el hilo: " + exception.getMessage());
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
+        });
+    }
+
+    @Bean
     public KStream<String, ResumenEntrenamientoEvento> procesarDatosEntrenamiento(StreamsBuilder streamsBuilder) {
         JsonSerde<DatoEntrenamientoEvento> datoSerde = new JsonSerde<>(DatoEntrenamientoEvento.class);
         JsonSerde<ResumenAcumulador> acumuladorSerde = new JsonSerde<>(ResumenAcumulador.class);
@@ -56,7 +66,7 @@ public class KafkaStreamsConfig {
                         Materialized.with(Serdes.String(), acumuladorSerde))
                 .toStream()
                 .map((ventana, acumulador) -> KeyValue.pair(ventana.key(), new ResumenEntrenamientoEvento(
-                        Long.valueOf(ventana.key()),
+                        acumulador.miembroId(),
                         acumulador.totalDuracionMinutos(),
                         acumulador.totalCalorias(),
                         acumulador.cantidadSesiones(),

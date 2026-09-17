@@ -21,7 +21,11 @@
     { "key": "rabbitmq_user", "value": "guest" },
     { "key": "rabbitmq_password", "value": "guest" },
     { "key": "kafka_ui_url", "value": "http://localhost:8090" },
-    { "key": "kafka_cluster_name", "value": "local" }
+    { "key": "kafka_cluster_name", "value": "local" },
+    { "key": "kafka_ocupacion_offset_baseline_flujo1", "value": "" },
+    { "key": "kafka_resumen_offset_baseline_flujo2", "value": "" },
+    { "key": "kafka_ocupacion_offset_baseline", "value": "" },
+    { "key": "kafka_ocupacion_offset_inmediato_post_reinicio", "value": "" }
   ],
   "item": [
     {
@@ -964,6 +968,34 @@
       "description": "Dispara cada flujo de streaming y verifica contra la REST API de Kafka UI (puerto 8090) que el consumer group correspondiente avanzo su offset commiteado. Requiere que ademas de los microservicios y Keycloak esten arriba los contenedores 'kafka' y 'kafka-ui' (ver docker-compose.yml). El flujo de recuperacion (c) depende de que el flujo (a) haya corrido antes en la misma ejecucion, para tener al menos un mensaje previamente commiteado que sirva de baseline -- es, por naturaleza, sensible a tiempos (best-effort), igual que el delay ya documentado para RabbitMQ en el README.",
       "item": [
         {
+          "name": "GET Capturar offset baseline de ms-programacion-dashboard antes del flujo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kafka_ui_url}}/api/clusters/{{kafka_cluster_name}}/consumer-groups/ms-programacion-dashboard",
+              "host": ["{{kafka_ui_url}}"],
+              "path": ["api", "clusters", "{{kafka_cluster_name}}", "consumer-groups", "ms-programacion-dashboard"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (grupo existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "pm.collectionVariables.set('kafka_ocupacion_offset_baseline_flujo1', total);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "POST Reportar ocupacion de clase - dispara evento de streaming",
           "request": {
             "method": "POST",
@@ -1025,9 +1057,38 @@
                   "});",
                   "const body = pm.response.json();",
                   "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
-                  "pm.test('El consumer group ya proceso al menos un mensaje', function () {",
-                  "    pm.expect(total).to.be.at.least(1);",
+                  "const baseline = parseInt(pm.collectionVariables.get('kafka_ocupacion_offset_baseline_flujo1'), 10);",
+                  "pm.test('El consumer group avanzo su offset respecto al baseline capturado antes del flujo (el contador es acumulativo entre corridas)', function () {",
+                  "    pm.expect(total).to.be.above(baseline);",
                   "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Capturar offset baseline de ms-membresias-resumen antes del flujo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kafka_ui_url}}/api/clusters/{{kafka_cluster_name}}/consumer-groups/ms-membresias-resumen",
+              "host": ["{{kafka_ui_url}}"],
+              "path": ["api", "clusters", "{{kafka_cluster_name}}", "consumer-groups", "ms-membresias-resumen"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (grupo existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "pm.collectionVariables.set('kafka_resumen_offset_baseline_flujo2', total);"
                 ]
               }
             }
@@ -1128,8 +1189,9 @@
                   "});",
                   "const body = pm.response.json();",
                   "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
-                  "pm.test('El resumen agregado por Kafka Streams ya fue consumido (sin esperar el cierre de la ventana, no hay suppress())', function () {",
-                  "    pm.expect(total).to.be.at.least(1);",
+                  "const baseline = parseInt(pm.collectionVariables.get('kafka_resumen_offset_baseline_flujo2'), 10);",
+                  "pm.test('El resumen agregado por Kafka Streams avanzo el offset respecto al baseline (sin esperar el cierre de la ventana, no hay suppress())', function () {",
+                  "    pm.expect(total).to.be.above(baseline);",
                   "});"
                 ]
               }
@@ -1183,6 +1245,16 @@
                 "exec": [
                   "pm.test('Status code es 202 (reinicio aceptado)', function () {",
                   "    pm.response.to.have.status(202);",
+                  "});",
+                  "pm.sendRequest({",
+                  "    url: pm.collectionVariables.get('kafka_ui_url') + '/api/clusters/' + pm.collectionVariables.get('kafka_cluster_name') + '/consumer-groups/ms-programacion-dashboard',",
+                  "    method: 'GET'",
+                  "}, function (err, res) {",
+                  "    if (!err && res.code === 200) {",
+                  "        const body = res.json();",
+                  "        const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "        pm.collectionVariables.set('kafka_ocupacion_offset_inmediato_post_reinicio', total);",
+                  "    }",
                   "});"
                 ]
               }
@@ -1212,8 +1284,10 @@
                   "const body = pm.response.json();",
                   "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
                   "const baseline = parseInt(pm.collectionVariables.get('kafka_ocupacion_offset_baseline'), 10);",
-                  "pm.test('El offset commiteado bajo respecto al baseline (el reinicio aplico seek a 0)', function () {",
-                  "    pm.expect(total).to.be.below(baseline);",
+                  "const inmediato = parseInt(pm.collectionVariables.get('kafka_ocupacion_offset_inmediato_post_reinicio'), 10);",
+                  "const puntoMasBajo = isNaN(inmediato) ? total : Math.min(inmediato, total);",
+                  "pm.test('El offset commiteado bajo respecto al baseline en algun momento tras el reinicio (el seek aplico; el consumidor puede haber alcanzado de nuevo el baseline para cuando corre este chequeo)', function () {",
+                  "    pm.expect(puntoMasBajo).to.be.below(baseline);",
                   "});"
                 ]
               }

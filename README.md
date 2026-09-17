@@ -137,11 +137,11 @@ cd ms-membresias && ./mvnw spring-boot:run
 cd ms-inventario && ./mvnw spring-boot:run
 ```
 
-En Windows usa `mvnw.cmd` en lugar de `./mvnw`. Keycloak y RabbitMQ siguen necesitando correr en Docker (`docker compose up -d keycloak rabbitmq`); si los microservicios corren fuera de Docker, cambia `spring.security.oauth2.resourceserver.jwt.jwk-set-uri` en cada `application.properties` de `keycloak:8080` a `localhost:8080`. `spring.rabbitmq.host` no necesita ese mismo cambio: ya está configurado en `localhost` por defecto en cada `application.properties`, y solo se sobreescribe a `rabbitmq` vía variable de entorno cuando corre dentro de Docker Compose (Opción 1).
+En Windows usa `mvnw.cmd` en lugar de `./mvnw`. Keycloak, RabbitMQ y Kafka siguen necesitando correr en Docker (`docker compose up -d keycloak rabbitmq kafka kafka-ui`); si los microservicios corren fuera de Docker, cambia `spring.security.oauth2.resourceserver.jwt.jwk-set-uri` en cada `application.properties` de `keycloak:8080` a `localhost:8080`. `spring.rabbitmq.host` no necesita ese mismo cambio: ya está configurado en `localhost` por defecto en cada `application.properties`, y solo se sobreescribe a `rabbitmq` vía variable de entorno cuando corre dentro de Docker Compose (Opción 1). `spring.kafka.bootstrap-servers` tampoco lo necesita: ya apunta a `localhost:9092` por defecto (el listener `PLAINTEXT_HOST` del broker), y solo se sobreescribe a `kafka:9092` dentro de Docker Compose.
 
 ### Probar los endpoints
 
-Con los 4 microservicios, Keycloak y RabbitMQ arriba (por cualquiera de las dos opciones), primero obtén un token (ver sección de Seguridad) y luego:
+Con los 4 microservicios, Keycloak, RabbitMQ y Kafka arriba (por cualquiera de las dos opciones), primero obtén un token (ver sección de Seguridad) y luego:
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8082/api/clases/1/entrenador

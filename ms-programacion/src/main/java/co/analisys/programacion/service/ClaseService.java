@@ -79,6 +79,11 @@ public class ClaseService {
             throw new IllegalArgumentException("La ocupacion actual no puede ser negativa");
         }
         OcupacionClaseEvento evento = new OcupacionClaseEvento(id.valor(), ocupacionActual, Instant.now());
-        kafkaTemplate.send(KafkaProducerConfig.OCUPACION_CLASES_TOPIC, id.valor().toString(), evento);
+        kafkaTemplate.send(KafkaProducerConfig.OCUPACION_CLASES_TOPIC, id.valor().toString(), evento)
+                .whenComplete((resultado, error) -> {
+                    if (error != null) {
+                        System.out.println("Error al publicar evento de ocupacion para clase " + id.valor() + ": " + error.getMessage());
+                    }
+                });
     }
 }
