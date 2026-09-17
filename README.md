@@ -87,6 +87,18 @@ Tres flujos de mensajería sobre RabbitMQ (diseño completo en
 
 `docker compose up` levanta también el contenedor `rabbitmq` (imagen `rabbitmq:3.13-management`). Consola de gestión: `http://localhost:15672` — `guest` / `guest`. Desde ahí se puede inspeccionar cada cola (mensajes pendientes, tasa de entrega) mientras se prueban los endpoints que publican eventos: `POST /api/miembros`, `PATCH /api/clases/{id}/horario`, `POST /api/miembros/{id}/pagos`.
 
+## Streaming de eventos: Kafka
+
+Dos flujos de streaming sobre Kafka (diseño completo en
+[`docs/superpowers/specs/2026-09-15-kafka-integracion-design.md`](docs/superpowers/specs/2026-09-15-kafka-integracion-design.md)):
+
+| Flujo | Productor → Consumidor | Topic |
+|---|---|---|
+| Ocupación de clases en tiempo real | `ms-programacion` → `ms-programacion` | `ocupacion-clases` |
+| Análisis de datos de entrenamiento (Kafka Streams, ventana de 5 min) | `ms-membresias` → `ms-membresias` (vía `datos-entrenamiento` → topología de agregación → `entrenamiento-resumen`) | `datos-entrenamiento`, `entrenamiento-resumen` |
+
+`docker compose up` levanta también los contenedores `kafka` (imagen `confluentinc/cp-kafka`, modo KRaft sin Zookeeper) y `kafka-ui` (consola web). Consola: `http://localhost:8090` — cluster `local`, sin autenticación. Desde ahí se puede inspeccionar cada topic (particiones, mensajes, offset commiteado por cada consumer group) mientras se prueban los endpoints que publican eventos: `POST /api/clases/{id}/ocupacion`, `POST /api/miembros/{id}/entrenamientos`. El endpoint `POST /api/admin/kafka/ocupacion-clases/reiniciar` (solo `ROLE_ADMIN`) demuestra el mecanismo de recuperación ante fallos: aprovecha la retención de 7 días del topic `ocupacion-clases` para reprocesar el historial completo desde el offset 0.
+
 ## Documentación de la API (Swagger/OpenAPI)
 
 Cada microservicio expone su documentación sin necesidad de token en `http://localhost:<puerto>/swagger-ui/index.html` (JSON crudo en `/v3/api-docs`).
@@ -135,7 +147,7 @@ Con los 4 microservicios, Keycloak y RabbitMQ arriba (por cualquiera de las dos 
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8082/api/clases/1/entrenador
 ```
 
-O importa [`postman/Gimnasio-Microservicios.postman_collection.json`](postman/Gimnasio-Microservicios.postman_collection.json) en Postman — trae una carpeta por microservicio con casos válidos y casos que verifican las invariantes de dominio (email inválido/duplicado, capacidad y cantidad negativas, especialidad fuera de catálogo, etc.), más `1. Seguridad (JWT)` (casos 401/403) y `2. RabbitMQ` (dispara cada flujo de mensajería y verifica contra la Management API de RabbitMQ que el mensaje pasó por la cola esperada, incluyendo el camino que cae a la DLQ de pagos). También se puede correr desde la terminal con [newman](https://github.com/postmanlabs/newman):
+O importa [`postman/Gimnasio-Microservicios.postman_collection.json`](postman/Gimnasio-Microservicios.postman_collection.json) en Postman — trae una carpeta por microservicio con casos válidos y casos que verifican las invariantes de dominio (email inválido/duplicado, capacidad y cantidad negativas, especialidad fuera de catálogo, etc.), más `1. Seguridad (JWT)` (casos 401/403), `2. RabbitMQ` (dispara cada flujo de mensajería y verifica contra la Management API de RabbitMQ que el mensaje pasó por la cola esperada, incluyendo el camino que cae a la DLQ de pagos) y `3. Kafka` (dispara el reporte de ocupacion y el registro de entrenamientos, verifica contra la REST API de Kafka UI que cada consumer group avanzo su offset, y ejercita el endpoint de recuperacion que reinicia el consumo desde offset 0). También se puede correr desde la terminal con [newman](https://github.com/postmanlabs/newman):
 
 ```bash
 newman run postman/Gimnasio-Microservicios.postman_collection.json --delay-request 6000

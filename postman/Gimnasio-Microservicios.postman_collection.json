@@ -19,7 +19,9 @@
     { "key": "member_token", "value": "" },
     { "key": "rabbitmq_mgmt_url", "value": "http://localhost:15672" },
     { "key": "rabbitmq_user", "value": "guest" },
-    { "key": "rabbitmq_password", "value": "guest" }
+    { "key": "rabbitmq_password", "value": "guest" },
+    { "key": "kafka_ui_url", "value": "http://localhost:8090" },
+    { "key": "kafka_cluster_name", "value": "local" }
   ],
   "item": [
     {
@@ -418,6 +420,182 @@
               }
             }
           ]
+        },
+        {
+          "name": "POST Reportar ocupacion de clase SIN token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"ocupacionActual\": 10\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases/1/ocupacion",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases", "1", "ocupacion"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 401 (sin credenciales)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Reportar ocupacion de clase con rol MEMBER -> 403 (requiere ADMIN o TRAINER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{member_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"ocupacionActual\": 10\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases/1/ocupacion",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases", "1", "ocupacion"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 403 (rol MEMBER sin permiso)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar entrenamiento SIN token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"duracionMinutos\": 30,\n    \"calorias\": 250\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros/1/entrenamientos",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros", "1", "entrenamientos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 401 (sin credenciales)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar entrenamiento con rol TRAINER -> 403 (requiere ADMIN o MEMBER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{trainer_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"duracionMinutos\": 30,\n    \"calorias\": 250\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros/1/entrenamientos",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros", "1", "entrenamientos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 403 (rol TRAINER sin permiso)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Reiniciar consumidor ocupacion-clases SIN token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/admin/kafka/ocupacion-clases/reiniciar",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "admin", "kafka", "ocupacion-clases", "reiniciar"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 401 (sin credenciales)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Reiniciar consumidor ocupacion-clases con rol TRAINER -> 403 (requiere ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{trainer_token}}" }],
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/admin/kafka/ocupacion-clases/reiniciar",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "admin", "kafka", "ocupacion-clases", "reiniciar"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 403 (rol TRAINER sin permiso)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -773,6 +951,269 @@
                   "const body = pm.response.json();",
                   "pm.test('El pago invalido quedo en la Dead Letter Queue', function () {",
                   "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Kafka",
+      "description": "Dispara cada flujo de streaming y verifica contra la REST API de Kafka UI (puerto 8090) que el consumer group correspondiente avanzo su offset commiteado. Requiere que ademas de los microservicios y Keycloak esten arriba los contenedores 'kafka' y 'kafka-ui' (ver docker-compose.yml). El flujo de recuperacion (c) depende de que el flujo (a) haya corrido antes en la misma ejecucion, para tener al menos un mensaje previamente commiteado que sirva de baseline -- es, por naturaleza, sensible a tiempos (best-effort), igual que el delay ya documentado para RabbitMQ en el README.",
+      "item": [
+        {
+          "name": "POST Reportar ocupacion de clase - dispara evento de streaming",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{trainer_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"ocupacionActual\": 15\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/clases/1/ocupacion",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "clases", "1", "ocupacion"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 202 (ocupacion aceptada)', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Verificar consumer group ms-programacion-dashboard proceso el mensaje",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kafka_ui_url}}/api/clusters/{{kafka_cluster_name}}/consumer-groups/ms-programacion-dashboard",
+              "host": ["{{kafka_ui_url}}"],
+              "path": ["api", "clusters", "{{kafka_cluster_name}}", "consumer-groups", "ms-programacion-dashboard"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["setTimeout(function () {}, 1500);"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (grupo existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "pm.test('El consumer group ya proceso al menos un mensaje', function () {",
+                  "    pm.expect(total).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar entrenamiento 1 - dispara evento de streaming",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{member_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"duracionMinutos\": 45,\n    \"calorias\": 400\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros/1/entrenamientos",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros", "1", "entrenamientos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 202 (entrenamiento aceptado)', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Registrar entrenamiento 2 - dentro de la misma ventana de 5 min",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{member_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"duracionMinutos\": 20,\n    \"calorias\": 150\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{ms_membresias_url}}/api/miembros/1/entrenamientos",
+              "host": ["{{ms_membresias_url}}"],
+              "path": ["api", "miembros", "1", "entrenamientos"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 202 (entrenamiento aceptado)', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Verificar consumer group ms-membresias-resumen proceso el resumen agregado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kafka_ui_url}}/api/clusters/{{kafka_cluster_name}}/consumer-groups/ms-membresias-resumen",
+              "host": ["{{kafka_ui_url}}"],
+              "path": ["api", "clusters", "{{kafka_cluster_name}}", "consumer-groups", "ms-membresias-resumen"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["setTimeout(function () {}, 1500);"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (grupo existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "pm.test('El resumen agregado por Kafka Streams ya fue consumido (sin esperar el cierre de la ventana, no hay suppress())', function () {",
+                  "    pm.expect(total).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Capturar offset baseline de ms-programacion-dashboard antes del reinicio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kafka_ui_url}}/api/clusters/{{kafka_cluster_name}}/consumer-groups/ms-programacion-dashboard",
+              "host": ["{{kafka_ui_url}}"],
+              "path": ["api", "clusters", "{{kafka_cluster_name}}", "consumer-groups", "ms-programacion-dashboard"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (grupo existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "pm.collectionVariables.set('kafka_ocupacion_offset_baseline', total);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Reiniciar consumidor ocupacion-clases desde offset 0",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{ms_programacion_url}}/api/admin/kafka/ocupacion-clases/reiniciar",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "admin", "kafka", "ocupacion-clases", "reiniciar"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 202 (reinicio aceptado)', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Verificar que el offset commiteado bajo respecto al baseline (best-effort)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{kafka_ui_url}}/api/clusters/{{kafka_cluster_name}}/consumer-groups/ms-programacion-dashboard",
+              "host": ["{{kafka_ui_url}}"],
+              "path": ["api", "clusters", "{{kafka_cluster_name}}", "consumer-groups", "ms-programacion-dashboard"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code es 200 (grupo existe)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "const baseline = parseInt(pm.collectionVariables.get('kafka_ocupacion_offset_baseline'), 10);",
+                  "pm.test('El offset commiteado bajo respecto al baseline (el reinicio aplico seek a 0)', function () {",
+                  "    pm.expect(total).to.be.below(baseline);",
                   "});"
                 ]
               }
