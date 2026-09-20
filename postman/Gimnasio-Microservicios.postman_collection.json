@@ -25,7 +25,8 @@
     { "key": "kafka_ocupacion_offset_baseline_flujo1", "value": "" },
     { "key": "kafka_resumen_offset_baseline_flujo2", "value": "" },
     { "key": "kafka_ocupacion_offset_baseline", "value": "" },
-    { "key": "kafka_ocupacion_offset_inmediato_post_reinicio", "value": "" }
+    { "key": "kafka_ocupacion_offset_minimo_post_reinicio", "value": "" },
+    { "key": "pagos_dlq_deliver_get_baseline", "value": "" }
   ],
   "item": [
     {
@@ -605,7 +606,7 @@
     },
     {
       "name": "2. RabbitMQ",
-      "description": "Dispara cada flujo de mensajeria y verifica contra la Management HTTP API de RabbitMQ (puerto 15672) que el mensaje efectivamente proceso por la cola esperada. Requiere que ademas de los microservicios y Keycloak este arriba el contenedor 'rabbitmq' (ver docker-compose.yml). Cada request de verificacion espera ~1.5s en su pre-request script para dar tiempo al listener a procesar antes de leer las estadisticas de la cola.",
+      "description": "Dispara cada flujo de mensajeria y verifica contra la Management HTTP API de RabbitMQ (puerto 15672) que el mensaje efectivamente proceso por la cola esperada. Requiere que ademas de los microservicios y Keycloak este arriba el contenedor 'rabbitmq' (ver docker-compose.yml). Cada request de verificacion espera ~2s en su pre-request script para que el listener procese el mensaje, y luego sondea con reintentos (hasta ~6s adicionales) hasta que message_stats refleje la entrega: RabbitMQ agrega esas estadisticas en un intervalo periodico (~5s por defecto), no al instante.",
       "item": [
         {
           "name": "POST Registrar miembro - dispara notificacion de inscripcion",
@@ -663,7 +664,16 @@
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
-                "exec": ["setTimeout(function () {}, 1500);"]
+                "exec": [
+                  "// El listener procesa casi al instante; una espera corta y real",
+                  "// (en vez del setTimeout no-esperado anterior, que no bloqueaba",
+                  "// nada) basta para que el mensaje ya figure como entregado.",
+                  "// Envuelta en IIFE async: el sandbox de Newman no permite",
+                  "// 'await' a nivel superior del script.",
+                  "(async function () {",
+                  "    await new Promise((resolve) => setTimeout(resolve, 2000));",
+                  "})();"
+                ]
               }
             },
             {
@@ -674,13 +684,43 @@
                   "pm.test('Status code es 200 (cola existe)', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "const body = pm.response.json();",
-                  "pm.test('El listener ya proceso el mensaje (no quedan pendientes)', function () {",
-                  "    pm.expect(body.messages_ready).to.eql(0);",
-                  "});",
-                  "pm.test('La cola entrego al menos un mensaje al listener', function () {",
-                  "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
-                  "});"
+                  "",
+                  "// RabbitMQ agrega message_stats (deliver_get, etc.) en un intervalo",
+                  "// periodico (collect_statistics_interval, 5s por defecto): la primera",
+                  "// vez que una cola recibe actividad, message_stats puede tardar hasta",
+                  "// ese intervalo en aparecer. Se sondea con reintentos en vez de leer",
+                  "// una sola muestra tras una espera fija (mismo problema de fondo ya",
+                  "// resuelto para los offsets de Kafka, ver carpeta '3. Kafka').",
+                  "(async function () {",
+                  "    async function leerCola() {",
+                  "        return new Promise((resolve, reject) => {",
+                  "            pm.sendRequest({",
+                  "                url: pm.collectionVariables.get('rabbitmq_mgmt_url') + '/api/queues/%2F/notificacion.inscripcion.queue',",
+                  "                method: 'GET',",
+                  "                auth: {",
+                  "                    type: 'basic',",
+                  "                    basic: [",
+                  "                        { key: 'username', value: pm.collectionVariables.get('rabbitmq_user') },",
+                  "                        { key: 'password', value: pm.collectionVariables.get('rabbitmq_password') }",
+                  "                    ]",
+                  "                }",
+                  "            }, (err, res) => (err ? reject(err) : resolve(res.json())));",
+                  "        });",
+                  "    }",
+                  "",
+                  "    let body = pm.response.json();",
+                  "    for (let i = 0; i < 10 && !(body.message_stats && body.message_stats.deliver_get >= 1); i++) {",
+                  "        await new Promise((resolve) => setTimeout(resolve, 600));",
+                  "        body = await leerCola();",
+                  "    }",
+                  "",
+                  "    pm.test('El listener ya proceso el mensaje (no quedan pendientes)', function () {",
+                  "        pm.expect(body.messages_ready).to.eql(0);",
+                  "    });",
+                  "    pm.test('La cola entrego al menos un mensaje al listener', function () {",
+                  "        pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
+                  "    });",
+                  "})();"
                 ]
               }
             }
@@ -742,7 +782,16 @@
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
-                "exec": ["setTimeout(function () {}, 1500);"]
+                "exec": [
+                  "// El listener procesa casi al instante; una espera corta y real",
+                  "// (en vez del setTimeout no-esperado anterior, que no bloqueaba",
+                  "// nada) basta para que el mensaje ya figure como entregado.",
+                  "// Envuelta en IIFE async: el sandbox de Newman no permite",
+                  "// 'await' a nivel superior del script.",
+                  "(async function () {",
+                  "    await new Promise((resolve) => setTimeout(resolve, 2000));",
+                  "})();"
+                ]
               }
             },
             {
@@ -753,13 +802,83 @@
                   "pm.test('Status code es 200 (cola existe)', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "const body = pm.response.json();",
-                  "pm.test('El listener ya proceso el mensaje (no quedan pendientes)', function () {",
-                  "    pm.expect(body.messages_ready).to.eql(0);",
+                  "",
+                  "// RabbitMQ agrega message_stats (deliver_get, etc.) en un intervalo",
+                  "// periodico (collect_statistics_interval, 5s por defecto): la primera",
+                  "// vez que una cola recibe actividad, message_stats puede tardar hasta",
+                  "// ese intervalo en aparecer. Se sondea con reintentos en vez de leer",
+                  "// una sola muestra tras una espera fija (mismo problema de fondo ya",
+                  "// resuelto para los offsets de Kafka, ver carpeta '3. Kafka').",
+                  "(async function () {",
+                  "    async function leerCola() {",
+                  "        return new Promise((resolve, reject) => {",
+                  "            pm.sendRequest({",
+                  "                url: pm.collectionVariables.get('rabbitmq_mgmt_url') + '/api/queues/%2F/horario.clase.queue',",
+                  "                method: 'GET',",
+                  "                auth: {",
+                  "                    type: 'basic',",
+                  "                    basic: [",
+                  "                        { key: 'username', value: pm.collectionVariables.get('rabbitmq_user') },",
+                  "                        { key: 'password', value: pm.collectionVariables.get('rabbitmq_password') }",
+                  "                    ]",
+                  "                }",
+                  "            }, (err, res) => (err ? reject(err) : resolve(res.json())));",
+                  "        });",
+                  "    }",
+                  "",
+                  "    let body = pm.response.json();",
+                  "    for (let i = 0; i < 10 && !(body.message_stats && body.message_stats.deliver_get >= 1); i++) {",
+                  "        await new Promise((resolve) => setTimeout(resolve, 600));",
+                  "        body = await leerCola();",
+                  "    }",
+                  "",
+                  "    pm.test('El listener ya proceso el mensaje (no quedan pendientes)', function () {",
+                  "        pm.expect(body.messages_ready).to.eql(0);",
+                  "    });",
+                  "    pm.test('La cola entrego al menos un mensaje al listener', function () {",
+                  "        pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
+                  "    });",
+                  "})();"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Verificar pagos.dlq (captura baseline)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmq_user}}" },
+                { "key": "password", "value": "{{rabbitmq_password}}" }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{rabbitmq_mgmt_url}}/api/queues/%2F/pagos.dlq",
+              "host": ["{{rabbitmq_mgmt_url}}"],
+              "path": ["api", "queues", "%2F", "pagos.dlq"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// message_stats.deliver_get de RabbitMQ es un contador acumulativo",
+                  "// que nunca se resetea entre corridas de la coleccion, asi que no se",
+                  "// puede comparar contra 0 en absoluto (ver mismo problema ya resuelto",
+                  "// para los offsets de Kafka). Se captura el valor antes de disparar",
+                  "// el pago valido y se compara luego contra este baseline.",
+                  "pm.test('Status code es 200 (cola DLQ existe)', function () {",
+                  "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('La cola entrego al menos un mensaje al listener', function () {",
-                  "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
-                  "});"
+                  "const body = pm.response.json();",
+                  "const deliverGet = (body.message_stats && body.message_stats.deliver_get) || 0;",
+                  "pm.collectionVariables.set('pagos_dlq_deliver_get_baseline', deliverGet);"
                 ]
               }
             }
@@ -821,7 +940,16 @@
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
-                "exec": ["setTimeout(function () {}, 1500);"]
+                "exec": [
+                  "// El listener procesa casi al instante; una espera corta y real",
+                  "// (en vez del setTimeout no-esperado anterior, que no bloqueaba",
+                  "// nada) basta para que el mensaje ya figure como entregado.",
+                  "// Envuelta en IIFE async: el sandbox de Newman no permite",
+                  "// 'await' a nivel superior del script.",
+                  "(async function () {",
+                  "    await new Promise((resolve) => setTimeout(resolve, 2000));",
+                  "})();"
+                ]
               }
             },
             {
@@ -832,10 +960,40 @@
                   "pm.test('Status code es 200 (cola existe)', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "const body = pm.response.json();",
-                  "pm.test('La cola de pagos entrego el mensaje al listener', function () {",
-                  "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
-                  "});"
+                  "",
+                  "// RabbitMQ agrega message_stats (deliver_get, etc.) en un intervalo",
+                  "// periodico (collect_statistics_interval, 5s por defecto): la primera",
+                  "// vez que una cola recibe actividad, message_stats puede tardar hasta",
+                  "// ese intervalo en aparecer. Se sondea con reintentos en vez de leer",
+                  "// una sola muestra tras una espera fija (mismo problema de fondo ya",
+                  "// resuelto para los offsets de Kafka, ver carpeta '3. Kafka').",
+                  "(async function () {",
+                  "    async function leerCola() {",
+                  "        return new Promise((resolve, reject) => {",
+                  "            pm.sendRequest({",
+                  "                url: pm.collectionVariables.get('rabbitmq_mgmt_url') + '/api/queues/%2F/pagos.procesar.queue',",
+                  "                method: 'GET',",
+                  "                auth: {",
+                  "                    type: 'basic',",
+                  "                    basic: [",
+                  "                        { key: 'username', value: pm.collectionVariables.get('rabbitmq_user') },",
+                  "                        { key: 'password', value: pm.collectionVariables.get('rabbitmq_password') }",
+                  "                    ]",
+                  "                }",
+                  "            }, (err, res) => (err ? reject(err) : resolve(res.json())));",
+                  "        });",
+                  "    }",
+                  "",
+                  "    let body = pm.response.json();",
+                  "    for (let i = 0; i < 10 && !(body.message_stats && body.message_stats.deliver_get >= 1); i++) {",
+                  "        await new Promise((resolve) => setTimeout(resolve, 600));",
+                  "        body = await leerCola();",
+                  "    }",
+                  "",
+                  "    pm.test('La cola de pagos entrego el mensaje al listener', function () {",
+                  "        pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
+                  "    });",
+                  "})();"
                 ]
               }
             }
@@ -864,7 +1022,16 @@
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
-                "exec": ["setTimeout(function () {}, 1500);"]
+                "exec": [
+                  "// El listener procesa casi al instante; una espera corta y real",
+                  "// (en vez del setTimeout no-esperado anterior, que no bloqueaba",
+                  "// nada) basta para que el mensaje ya figure como entregado.",
+                  "// Envuelta en IIFE async: el sandbox de Newman no permite",
+                  "// 'await' a nivel superior del script.",
+                  "(async function () {",
+                  "    await new Promise((resolve) => setTimeout(resolve, 2000));",
+                  "})();"
+                ]
               }
             },
             {
@@ -877,8 +1044,12 @@
                   "});",
                   "const body = pm.response.json();",
                   "const deliverGet = (body.message_stats && body.message_stats.deliver_get) || 0;",
-                  "pm.test('El pago valido no genero entregas en la DLQ', function () {",
-                  "    pm.expect(deliverGet).to.eql(0);",
+                  "const baseline = parseInt(pm.collectionVariables.get('pagos_dlq_deliver_get_baseline'), 10) || 0;",
+                  "// Aserto de ausencia (no hay entregas nuevas): no hay nada que",
+                  "// sondear, deliverGet ya cae a 0 vía el fallback si message_stats",
+                  "// aun no aparecio, que es exactamente el resultado esperado aqui.",
+                  "pm.test('El pago valido no genero entregas nuevas en la DLQ', function () {",
+                  "    pm.expect(deliverGet - baseline).to.eql(0);",
                   "});"
                 ]
               }
@@ -941,7 +1112,16 @@
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
-                "exec": ["setTimeout(function () {}, 1500);"]
+                "exec": [
+                  "// El listener procesa casi al instante; una espera corta y real",
+                  "// (en vez del setTimeout no-esperado anterior, que no bloqueaba",
+                  "// nada) basta para que el mensaje ya figure como entregado.",
+                  "// Envuelta en IIFE async: el sandbox de Newman no permite",
+                  "// 'await' a nivel superior del script.",
+                  "(async function () {",
+                  "    await new Promise((resolve) => setTimeout(resolve, 2000));",
+                  "})();"
+                ]
               }
             },
             {
@@ -952,10 +1132,40 @@
                   "pm.test('Status code es 200 (cola DLQ existe)', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "const body = pm.response.json();",
-                  "pm.test('El pago invalido quedo en la Dead Letter Queue', function () {",
-                  "    pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
-                  "});"
+                  "",
+                  "// RabbitMQ agrega message_stats (deliver_get, etc.) en un intervalo",
+                  "// periodico (collect_statistics_interval, 5s por defecto): la primera",
+                  "// vez que una cola recibe actividad, message_stats puede tardar hasta",
+                  "// ese intervalo en aparecer. Se sondea con reintentos en vez de leer",
+                  "// una sola muestra tras una espera fija (mismo problema de fondo ya",
+                  "// resuelto para los offsets de Kafka, ver carpeta '3. Kafka').",
+                  "(async function () {",
+                  "    async function leerCola() {",
+                  "        return new Promise((resolve, reject) => {",
+                  "            pm.sendRequest({",
+                  "                url: pm.collectionVariables.get('rabbitmq_mgmt_url') + '/api/queues/%2F/pagos.dlq',",
+                  "                method: 'GET',",
+                  "                auth: {",
+                  "                    type: 'basic',",
+                  "                    basic: [",
+                  "                        { key: 'username', value: pm.collectionVariables.get('rabbitmq_user') },",
+                  "                        { key: 'password', value: pm.collectionVariables.get('rabbitmq_password') }",
+                  "                    ]",
+                  "                }",
+                  "            }, (err, res) => (err ? reject(err) : resolve(res.json())));",
+                  "        });",
+                  "    }",
+                  "",
+                  "    let body = pm.response.json();",
+                  "    for (let i = 0; i < 10 && !(body.message_stats && body.message_stats.deliver_get >= 1); i++) {",
+                  "        await new Promise((resolve) => setTimeout(resolve, 600));",
+                  "        body = await leerCola();",
+                  "    }",
+                  "",
+                  "    pm.test('El pago invalido quedo en la Dead Letter Queue', function () {",
+                  "        pm.expect(body.message_stats.deliver_get).to.be.at.least(1);",
+                  "    });",
+                  "})();"
                 ]
               }
             }
@@ -965,7 +1175,7 @@
     },
     {
       "name": "3. Kafka",
-      "description": "Dispara cada flujo de streaming y verifica contra la REST API de Kafka UI (puerto 8090) que el consumer group correspondiente avanzo su offset commiteado. Requiere que ademas de los microservicios y Keycloak esten arriba los contenedores 'kafka' y 'kafka-ui' (ver docker-compose.yml). El flujo de recuperacion (c) depende de que el flujo (a) haya corrido antes en la misma ejecucion, para tener al menos un mensaje previamente commiteado que sirva de baseline -- es, por naturaleza, sensible a tiempos (best-effort), igual que el delay ya documentado para RabbitMQ en el README.",
+      "description": "Dispara cada flujo de streaming y verifica contra la REST API de Kafka UI (puerto 8090) que el consumer group correspondiente avanzo su offset commiteado. Requiere que ademas de los microservicios y Keycloak esten arriba los contenedores 'kafka' y 'kafka-ui' (ver docker-compose.yml). El flujo de recuperacion (c) depende de que el flujo (a) haya corrido antes en la misma ejecucion, para tener al menos un mensaje previamente commiteado que sirva de baseline. Su verificacion no sondea el offset commiteado de Kafka UI (esa caida transitoria dura apenas decenas de milisegundos tras un onset de hasta varios segundos, una combinacion no observable de forma fiable por HTTP externo): en su lugar, ms-programacion expone un contador determinista (GET /api/admin/kafka/ocupacion-clases/estado) que el test sondea con reintentos hasta alcanzar el valor objetivo, sin depender de ninguna ventana de tiempo.",
       "item": [
         {
           "name": "GET Capturar offset baseline de ms-programacion-dashboard antes del flujo",
@@ -1044,7 +1254,16 @@
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
-                "exec": ["setTimeout(function () {}, 1500);"]
+                "exec": [
+                  "// El listener procesa casi al instante; una espera corta y real",
+                  "// (en vez del setTimeout no-esperado anterior, que no bloqueaba",
+                  "// nada) basta para que el mensaje ya figure como entregado.",
+                  "// Envuelta en IIFE async: el sandbox de Newman no permite",
+                  "// 'await' a nivel superior del script.",
+                  "(async function () {",
+                  "    await new Promise((resolve) => setTimeout(resolve, 2000));",
+                  "})();"
+                ]
               }
             },
             {
@@ -1173,26 +1392,52 @@
           },
           "event": [
             {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["setTimeout(function () {}, 1500);"]
-              }
-            },
-            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "// Kafka Streams solo commitea (y por lo tanto publica el resultado",
+                  "// de la agregacion) cada commit.interval.ms (bajado a 1s en la app,",
+                  "// ver KafkaStreamsConfig). En vez de adivinar un delay fijo, se",
+                  "// pollea la API de kafka-ui hasta ver el offset avanzar o hasta",
+                  "// agotar el tiempo. Envuelto en IIFE async porque el sandbox de",
+                  "// Newman no permite 'await' a nivel superior del script.",
                   "pm.test('Status code es 200 (grupo existe)', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "const body = pm.response.json();",
-                  "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
-                  "const baseline = parseInt(pm.collectionVariables.get('kafka_resumen_offset_baseline_flujo2'), 10);",
-                  "pm.test('El resumen agregado por Kafka Streams avanzo el offset respecto al baseline (sin esperar el cierre de la ventana, no hay suppress())', function () {",
-                  "    pm.expect(total).to.be.above(baseline);",
-                  "});"
+                  "",
+                  "(async function () {",
+                  "    async function pollHastaAvanzar(baseline, intentos, intervaloMs) {",
+                  "        for (let i = 0; i < intentos; i++) {",
+                  "            const res = await new Promise((resolve, reject) => {",
+                  "                pm.sendRequest({ url: pm.request.url.toString(), method: 'GET' },",
+                  "                    (err, res) => (err ? reject(err) : resolve(res)));",
+                  "            });",
+                  "            if (res.code === 200) {",
+                  "                const body = res.json();",
+                  "                const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "                if (total > baseline) {",
+                  "                    return total;",
+                  "                }",
+                  "            }",
+                  "            await new Promise((resolve) => setTimeout(resolve, intervaloMs));",
+                  "        }",
+                  "        return null;",
+                  "    }",
+                  "",
+                  "    const baseline = parseInt(pm.collectionVariables.get('kafka_resumen_offset_baseline_flujo2'), 10);",
+                  "    const body = pm.response.json();",
+                  "    let total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
+                  "    if (total <= baseline) {",
+                  "        const avance = await pollHastaAvanzar(baseline, 8, 500);",
+                  "        if (avance !== null) {",
+                  "            total = avance;",
+                  "        }",
+                  "    }",
+                  "    pm.test('El resumen agregado por Kafka Streams avanzo el offset respecto al baseline', function () {",
+                  "        pm.expect(total).to.be.above(baseline);",
+                  "    });",
+                  "})();"
                 ]
               }
             }
@@ -1220,7 +1465,22 @@
                   "});",
                   "const body = pm.response.json();",
                   "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
-                  "pm.collectionVariables.set('kafka_ocupacion_offset_baseline', total);"
+                  "pm.collectionVariables.set('kafka_ocupacion_offset_baseline', total);",
+                  "",
+                  "// Baseline del contador interno del listener (ver OcupacionClaseListener /",
+                  "// AdminKafkaController): un seek a offset 0 reprocesa el historial",
+                  "// completo del topic, asi que el valor final esperado tras el reinicio",
+                  "// es procesadosBaseline + total (offset baseline capturado arriba).",
+                  "(async function () {",
+                  "    const res = await new Promise((resolve, reject) => {",
+                  "        pm.sendRequest({",
+                  "            url: pm.collectionVariables.get('ms_programacion_url') + '/api/admin/kafka/ocupacion-clases/estado',",
+                  "            method: 'GET',",
+                  "            header: { Authorization: 'Bearer ' + pm.collectionVariables.get('admin_token') }",
+                  "        }, (err, res) => (err ? reject(err) : resolve(res)));",
+                  "    });",
+                  "    pm.collectionVariables.set('kafka_ocupacion_mensajes_baseline', res.json().mensajesProcesados);",
+                  "})();"
                 ]
               }
             }
@@ -1245,16 +1505,6 @@
                 "exec": [
                   "pm.test('Status code es 202 (reinicio aceptado)', function () {",
                   "    pm.response.to.have.status(202);",
-                  "});",
-                  "pm.sendRequest({",
-                  "    url: pm.collectionVariables.get('kafka_ui_url') + '/api/clusters/' + pm.collectionVariables.get('kafka_cluster_name') + '/consumer-groups/ms-programacion-dashboard',",
-                  "    method: 'GET'",
-                  "}, function (err, res) {",
-                  "    if (!err && res.code === 200) {",
-                  "        const body = res.json();",
-                  "        const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
-                  "        pm.collectionVariables.set('kafka_ocupacion_offset_inmediato_post_reinicio', total);",
-                  "    }",
                   "});"
                 ]
               }
@@ -1262,14 +1512,14 @@
           ]
         },
         {
-          "name": "GET Verificar que el offset commiteado bajo respecto al baseline (best-effort)",
+          "name": "GET Verificar que el reinicio reproceso todo el historial",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
             "url": {
-              "raw": "{{kafka_ui_url}}/api/clusters/{{kafka_cluster_name}}/consumer-groups/ms-programacion-dashboard",
-              "host": ["{{kafka_ui_url}}"],
-              "path": ["api", "clusters", "{{kafka_cluster_name}}", "consumer-groups", "ms-programacion-dashboard"]
+              "raw": "{{ms_programacion_url}}/api/admin/kafka/ocupacion-clases/estado",
+              "host": ["{{ms_programacion_url}}"],
+              "path": ["api", "admin", "kafka", "ocupacion-clases", "estado"]
             }
           },
           "event": [
@@ -1278,17 +1528,45 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code es 200 (grupo existe)', function () {",
+                  "pm.test('Status code es 200', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "const body = pm.response.json();",
-                  "const total = (body.partitions || []).reduce((sum, p) => sum + (p.currentOffset || 0), 0);",
-                  "const baseline = parseInt(pm.collectionVariables.get('kafka_ocupacion_offset_baseline'), 10);",
-                  "const inmediato = parseInt(pm.collectionVariables.get('kafka_ocupacion_offset_inmediato_post_reinicio'), 10);",
-                  "const puntoMasBajo = isNaN(inmediato) ? total : Math.min(inmediato, total);",
-                  "pm.test('El offset commiteado bajo respecto al baseline en algun momento tras el reinicio (el seek aplico; el consumidor puede haber alcanzado de nuevo el baseline para cuando corre este chequeo)', function () {",
-                  "    pm.expect(puntoMasBajo).to.be.below(baseline);",
-                  "});"
+                  "",
+                  "// El objetivo determinista es procesadosBaseline + offsetBaseline: un",
+                  "// seek a offset 0 (ver AdminKafkaController.reiniciarOcupacionClases)",
+                  "// reprocesa el historial completo del topic, incrementando el contador",
+                  "// del listener en exactamente esa cantidad. En vez de intentar",
+                  "// muestrear por sondeo una caida transitoria del offset commiteado",
+                  "// (la ventana real medida empiricamente dura decenas de milisegundos,",
+                  "// demasiado angosta para un sondeo HTTP externo fiable), se espera a",
+                  "// que el contador alcance el objetivo conocido, con un timeout",
+                  "// generoso. Envuelto en IIFE async porque el sandbox de Newman no",
+                  "// permite 'await' a nivel superior del script.",
+                  "(async function () {",
+                  "    const offsetBaseline = parseInt(pm.collectionVariables.get('kafka_ocupacion_offset_baseline'), 10);",
+                  "    const procesadosBaseline = parseInt(pm.collectionVariables.get('kafka_ocupacion_mensajes_baseline'), 10);",
+                  "    const objetivo = procesadosBaseline + offsetBaseline;",
+                  "",
+                  "    async function leerMensajesProcesados() {",
+                  "        return new Promise((resolve, reject) => {",
+                  "            pm.sendRequest({",
+                  "                url: pm.collectionVariables.get('ms_programacion_url') + '/api/admin/kafka/ocupacion-clases/estado',",
+                  "                method: 'GET',",
+                  "                header: { Authorization: 'Bearer ' + pm.collectionVariables.get('admin_token') }",
+                  "            }, (err, res) => (err ? reject(err) : resolve(res.json().mensajesProcesados)));",
+                  "        });",
+                  "    }",
+                  "",
+                  "    let actual = pm.response.json().mensajesProcesados;",
+                  "    for (let i = 0; i < 10 && actual < objetivo; i++) {",
+                  "        await new Promise((resolve) => setTimeout(resolve, 300));",
+                  "        actual = await leerMensajesProcesados();",
+                  "    }",
+                  "",
+                  "    pm.test('El reinicio (seek a offset 0) reproceso todo el historial del topic', function () {",
+                  "        pm.expect(actual).to.eql(objetivo);",
+                  "    });",
+                  "})();"
                 ]
               }
             }

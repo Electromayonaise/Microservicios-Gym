@@ -6,10 +6,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @Tag(name = "Admin Kafka", description = "Operaciones administrativas sobre los consumidores de Kafka")
 @RestController
@@ -26,5 +29,14 @@ public class AdminKafkaController {
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     public void reiniciarOcupacionClases() {
         ocupacionClaseListener.seekToBeginning();
+    }
+
+    @Operation(
+        summary = "Consultar el progreso del consumidor de ocupacion-clases",
+        description = "Expone el total de mensajes procesados por el listener del dashboard desde que arranco la aplicacion. Permite verificar de forma determinista que un reinicio (seek a offset 0) efectivamente reproceso el historial completo, sin depender de observar por sondeo una caida transitoria del offset commiteado.")
+    @GetMapping("/ocupacion-clases/estado")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public Map<String, Long> estadoOcupacionClases() {
+        return Map.of("mensajesProcesados", ocupacionClaseListener.getMensajesProcesados());
     }
 }

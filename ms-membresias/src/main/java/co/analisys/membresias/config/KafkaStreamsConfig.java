@@ -39,6 +39,12 @@ public class KafkaStreamsConfig {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "ms-membresias-streams");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        // Por defecto Kafka Streams commitea (y por lo tanto publica el
+        // resultado de la agregacion) cada 30s. Se baja a 1s para que el
+        // resumen agregado quede disponible casi de inmediato tras cada
+        // evento, en vez de forzar a quien consulta (incluida la coleccion
+        // de Postman) a esperar hasta 30s de forma no determinista.
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         return new KafkaStreamsConfiguration(props);
     }
 
