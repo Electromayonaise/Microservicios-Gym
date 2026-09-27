@@ -1,0 +1,68 @@
+@startuml 01-arquitectura-c4
+' Vista C4 de contenedores. Usa la stdlib C4 incluida en PlantUML
+' (!include <C4/C4_Container>), sin dependencia de red.
+' Fuente: docker-compose.yml y ms-*/src/main/resources/application.properties.
+'   Puertos: docker-compose.yml:L4-L5, L22-L23, L41-L42, L52-L53, L95-L96, L111-L113, L132-L133
+'   Bases de datos: ms-*/src/main/resources/application.properties:L4 (jdbc:h2:mem:*)
+'   REST ms-programacion -> ms-personal: docker-compose.yml:L57, config/RestClientConfig.java:L18-L35
+!include <C4/C4_Container>
+
+title Gimnasio - Diagrama de contenedores (C4)
+
+skinparam dpi 130
+LAYOUT_TOP_DOWN()
+HIDE_STEREOTYPE()
+
+Person(cliente, "Personal y miembros del gimnasio", "Roles ROLE_ADMIN, ROLE_TRAINER, ROLE_MEMBER; acceso via Postman o Swagger UI")
+
+System_Boundary(gym, "Sistema de gestion del gimnasio (docker-compose)") {
+  Boundary(micro, "Microservicios (Spring Boot 3.3.2)") {
+    Container(msMem, "ms-membresias", "Spring Boot", "Miembros, pagos y entrenamientos")
+    Container(msProg, "ms-programacion", "Spring Boot", "Clases, horarios y ocupacion")
+    Container(msPers, "ms-personal", "Spring Boot", "Entrenadores")
+    Container(msInv, "ms-inventario", "Spring Boot", "Equipos")
+    ContainerDb(dbMem, "membresiasdb", "H2 en memoria", "")
+    ContainerDb(dbProg, "programaciondb", "H2 en memoria", "")
+    ContainerDb(dbPers, "personaldb", "H2 en memoria", "")
+    ContainerDb(dbInv, "inventariodb", "H2 en memoria", "")
+  }
+  ContainerQueue(kafka, "Kafka", "cp-kafka 7.6.1, KRaft", "Streaming de eventos")
+  ContainerQueue(rabbit, "RabbitMQ", "rabbitmq:3.13", "Mensajeria asincrona")
+  Container(kc, "Keycloak", "Keycloak 26.5.0", "Realm gimnasio: emite y firma JWT")
+}
+
+Lay_R(msMem, msProg)
+Lay_R(msProg, msPers)
+Lay_R(msPers, msInv)
+Lay_D(msMem, dbMem)
+Lay_D(msProg, dbProg)
+Lay_D(msPers, dbPers)
+Lay_D(msInv, dbInv)
+Lay_D(dbMem, kafka)
+Lay_D(dbPers, rabbit)
+Lay_D(dbInv, kc)
+Lay_R(kafka, rabbit)
+Lay_R(rabbit, kc)
+
+Rel(cliente, msMem, "Usa", "HTTP/REST :8081, JWT")
+Rel(cliente, msProg, "Usa", "HTTP/REST :8082, JWT")
+Rel(cliente, msPers, "Usa", "HTTP/REST :8083, JWT")
+Rel(cliente, msInv, "Usa", "HTTP/REST :8084, JWT")
+Rel(cliente, kc, "Obtiene token", "HTTP (OIDC) :8080")
+
+Rel_R(msProg, msPers, "Consulta entrenador", "HTTP/REST :8083, JWT reenviado")
+
+Rel(msPers, dbPers, "Lee y escribe", "JDBC")
+Rel(msProg, dbProg, "Lee y escribe", "JDBC")
+Rel(msMem, dbMem, "Lee y escribe", "JDBC")
+Rel(msInv, dbInv, "Lee y escribe", "JDBC")
+
+Rel(msPers, rabbit, "Consume", "AMQP :5672")
+Rel(msProg, rabbit, "Publica", "AMQP :5672")
+Rel(msMem, rabbit, "Publica y consume", "AMQP :5672")
+Rel(msProg, kafka, "Produce y consume", "Kafka :9092")
+Rel(msMem, kafka, "Produce, consume y procesa (Kafka Streams)", "Kafka :9092")
+
+Rel(micro, kc, "Los cuatro validan JWT", "HTTP (JWKS) :8080")
+
+@enduml

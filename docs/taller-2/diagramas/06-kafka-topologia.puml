@@ -1,0 +1,67 @@
+@startuml 06-kafka-topologia
+' Topologia estatica de Kafka: productores -> topics -> consumidores / Kafka Streams,
+' con el mecanismo de checkpoint y recuperacion de offsets.
+' Referencias:
+'   ms-programacion/.../config/KafkaProducerConfig.java:L22, L41-L47 (ocupacion-clases: 3 part., retention.ms=604800000)
+'   ms-programacion/.../service/ClaseService.java:L82 (key claseId)
+'   ms-programacion/.../config/KafkaConsumerConfig.java:L32, L39, L57, L63-L64
+'   ms-programacion/.../messaging/OcupacionClaseListener.java:L14-L25
+'   ms-programacion/.../controller/AdminKafkaController.java:L27-L32
+'   ms-membresias/.../config/KafkaProducerConfig.java:L22-L23, L42-L56
+'   ms-membresias/.../service/MiembroService.java:L67 (key miembroId)
+'   ms-membresias/.../config/KafkaStreamsConfig.java:L39, L47, L65-L82
+'   ms-membresias/.../config/KafkaConsumerConfig.java:L43; messaging/ResumenEntrenamientoListener.java:L11
+' Replicas: RF 1 (broker unico, docker-compose.yml:L129-L150; verificado con kafka-topics --describe).
+
+title Kafka - Topologia (topics, consumer groups, Kafka Streams y offsets)
+
+left to right direction
+skinparam shadowing false
+skinparam dpi 130
+skinparam defaultFontSize 12
+skinparam ArrowFontSize 11
+skinparam nodesep 30
+skinparam ranksep 70
+skinparam componentStyle rectangle
+skinparam noteBackgroundColor #FFF8DC
+skinparam queue {
+  BackgroundColor #FFF4E5
+}
+
+package "Productores" as pProd {
+  component "ms-programacion\nClaseService" as CS
+  component "ms-membresias\nMiembroService" as MS
+}
+
+node "kafka :9092 (KRaft, 1 broker)" as nKafka {
+  queue "ocupacion-clases\n3 particiones, RF 1, retencion 7 d" as tOcup
+  queue "~__consumer_offsets\ncheckpoint de cada group;\nal reiniciar se retoma desde aqui" as tOff
+  queue "datos-entrenamiento\n3 particiones, RF 1, retencion 7 d" as tDatos
+  queue "ms-membresias-streams-...-changelog\n(state store)" as tChg
+  queue "entrenamiento-resumen\n3 particiones, RF 1, retencion 7 d" as tRes
+}
+
+package "Consumidores" as pCons {
+  component "ms-programacion\nOcupacionClaseListener\ngroup ms-programacion-dashboard\n3 hilos, 1 registro/poll, ack MANUAL_IMMEDIATE" as OL
+  component "ms-programacion\nAdminKafkaController\nPOST .../ocupacion-clases/reiniciar" as AK
+  component "ms-membresias\nKafka Streams (ms-membresias-streams)\ngroupByKey -> ventana tumbling 5 min -> aggregate\ncommit cada 1 s" as KS
+  component "ms-membresias\nResumenEntrenamientoListener\ngroup ms-membresias-resumen, ack MANUAL" as RL
+}
+
+CS --> tOcup : produce\nkey = claseId
+MS --> tDatos : produce\nkey = miembroId
+
+tOcup --> OL : consume
+tDatos --> KS : consume (stream)
+tRes --> RL : consume
+
+tRes <-- KS : produce (to)
+tChg <-- KS : state store
+
+tOff <-- OL : commit por mensaje
+tOff <-- KS : commit
+tOff <-- RL : commit
+
+AK -> OL : seekToBeginning()\nreproceso desde offset 0
+
+@enduml

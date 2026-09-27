@@ -1,0 +1,66 @@
+@startuml 02-seguridad-secuencia
+' Diagrama de secuencia - Autenticacion JWT y autorizacion por rol
+' Referencias:
+'   ms-*/src/main/java/co/analisys/*/config/SecurityConfig.java:L21-L43
+'   ms-*/src/main/java/co/analisys/*/config/KeycloakRealmRoleConverter.java:L14-L25
+'   ms-*/src/main/resources/application.properties (issuer-uri, jwk-set-uri)
+'   keycloak/full-export/gimnasio-realm.json:L3, L5 (RS256), L8 (accessTokenLifespan=300)
+'   ms-membresias/.../controller/MiembroController.java:L38
+'   ms-programacion/.../config/RestClientConfig.java:L22-L33 (reenvio del JWT)
+' Filtros y manejadores: los que Spring Security 6 registra por defecto con
+' oauth2ResourceServer().jwt(); el proyecto no define manejadores propios de 401/403.
+
+title Seguridad JWT - ejemplo GET /api/miembros (ms-membresias)
+
+autonumber
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam noteBackgroundColor #FFF8DC
+
+participant "Postman" as C
+participant "Keycloak\nrealm gimnasio" as K
+box "ms-membresias :8081" #F4FFF0
+  participant "BearerToken\nAuthenticationFilter" as F
+  participant "JwtAuthenticationProvider\n(NimbusJwtDecoder +\nKeycloakRealmRoleConverter)" as D
+  participant "AuthorizationFilter /\n@PreAuthorize" as A
+  participant "MiembroController" as MC
+end box
+
+== Login ==
+C -> K : POST /protocol/openid-connect/token\n(password grant, client *-service)
+K --> C : access_token RS256 (exp 300 s,\nrealm_access.roles, iss localhost:8080)
+
+== Token valido y rol suficiente -> 200 ==
+C -> F : Bearer <JWT trainer1>
+F -> D : authenticate
+D -> K : GET /certs (JWKS, en cache)
+D -> D : firma, exp, iss; realm_access.roles -> ROLE_TRAINER
+D --> F : autenticado
+F -> A : hasAnyRole('ROLE_ADMIN','ROLE_TRAINER')
+A -> MC : obtenerTodosMiembros()
+MC --> C : 200
+
+== Sin token -> 401 ==
+C -> F : sin Authorization
+F -> A : peticion anonima
+A --> C : 401 WWW-Authenticate: Bearer\n(ExceptionTranslationFilter -> BearerTokenAuthenticationEntryPoint)
+
+== Token malformado, alterado o expirado -> 401 ==
+C -> F : Bearer <token invalido>
+F -> D : authenticate
+D --> F : InvalidBearerTokenException
+F --> C : 401 error="invalid_token"\n("Malformed token" | "Signed JWT rejected" | "Jwt expired at ...")
+
+== Rol insuficiente -> 403 ==
+C -> F : Bearer <JWT member1>
+F -> D : authenticate
+D --> F : autenticado [ROLE_MEMBER]
+F -> A : hasAnyRole('ROLE_ADMIN','ROLE_TRAINER')
+A --> C : 403 error="insufficient_scope"\n(BearerTokenAccessDeniedHandler)
+
+note over C, MC
+  ms-programacion reenvia el mismo header Authorization a ms-personal
+  (RestClientConfig.java:L22-L33); ms-personal repite la misma validacion.
+end note
+
+@enduml

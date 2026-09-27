@@ -1,0 +1,86 @@
+@startuml 05-rabbitmq-topologia
+' Topologia estatica de RabbitMQ: productor -> exchange -> binding -> cola -> consumidor.
+' Referencias:
+'   ms-membresias/.../config/RabbitMQConfig.java:L20-L29 (nombres), L31-L44, L46-L77 (declaraciones), L91-L98 (listener factory)
+'   ms-membresias/.../service/MiembroService.java:L42, L56 (publicacion)
+'   ms-membresias/.../messaging/NotificacionInscripcionListener.java:L11
+'   ms-membresias/.../messaging/PagoProcesadorListener.java:L14-L19
+'   ms-membresias/.../messaging/PagoFallidoListener.java:L11
+'   ms-programacion/.../config/RabbitMQConfig.java:L16-L22; service/ClaseService.java:L70
+'   ms-personal/.../config/RabbitMQConfig.java:L20-L37; messaging/HorarioClaseListener.java:L11
+
+title RabbitMQ - Topologia (exchanges, bindings y colas)
+
+left to right direction
+skinparam shadowing false
+skinparam dpi 130
+skinparam defaultFontSize 12
+skinparam ArrowFontSize 11
+skinparam nodesep 25
+skinparam ranksep 70
+skinparam componentStyle rectangle
+skinparam noteBackgroundColor #FFF8DC
+skinparam rectangle<<exchange>> {
+  BackgroundColor #E8F0FE
+}
+skinparam queue {
+  BackgroundColor #FFF4E5
+}
+hide <<exchange>> stereotype
+
+package "ms-membresias\n(productor)" as pMemP {
+  component "MiembroService" as MS
+}
+package "ms-programacion\n(productor)" as pProgP {
+  component "ClaseService" as CS
+}
+
+node "rabbitmq :5672" as nRmq {
+  rectangle "membresias.exchange\n<<topic>>" <<exchange>> as xMem
+  rectangle "programacion.exchange\n<<topic>>" <<exchange>> as xProg
+  rectangle "pagos.exchange\n<<direct>>" <<exchange>> as xPag
+  queue "notificacion.inscripcion.queue\n(durable)" as qIns
+  queue "horario.clase.queue\n(durable)" as qHor
+  queue "pagos.procesar.queue\n(durable)" as qPag
+  rectangle "pagos.dlx\n<<direct>>" <<exchange>> as xDlx
+  queue "pagos.dlq\n(durable)" as qDlq
+}
+
+package "ms-membresias\n(consumidores)" as pMemC {
+  component "NotificacionInscripcionListener" as NL
+  component "PagoProcesadorListener" as PL
+  component "PagoFallidoListener" as PFL
+}
+package "ms-personal\n(consumidor)" as pPersC {
+  component "HorarioClaseListener" as HL
+}
+
+MS --> xMem : publica\nrk miembro.inscrito
+CS --> xProg : publica\nrk clase.horario.cambiado
+MS --> xPag : publica\nrk pago.procesar
+
+xMem --> qIns : binding\nmiembro.inscrito
+xProg --> qHor : binding\nclase.horario.cambiado
+xPag --> qPag : binding\npago.procesar
+
+' mismo rango: pagos.dlx y pagos.dlq se apilan bajo pagos.procesar.queue
+qPag -> xDlx : dead-letter\n(rechazo sin reencolar)
+xDlx -> qDlq : binding\npago.fallido
+
+qIns --> NL : @RabbitListener
+qHor --> HL : @RabbitListener
+qPag --> PL : @RabbitListener
+qDlq --> PFL : @RabbitListener
+
+note top of qDlq
+  pagos.procesar.queue:
+  x-dead-letter-exchange = pagos.dlx
+  x-dead-letter-routing-key = pago.fallido
+  (RabbitMQConfig.java:L57-L61)
+  defaultRequeueRejected = false (L96)
+  AmqpRejectAndDontRequeueException si monto
+  nulo o <= 0 (PagoProcesadorListener.java:L16-L18)
+end note
+
+
+@enduml

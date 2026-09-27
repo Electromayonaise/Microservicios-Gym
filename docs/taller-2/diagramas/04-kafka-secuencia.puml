@@ -1,0 +1,80 @@
+@startuml 04-kafka-secuencia
+' Diagrama de secuencia - Streaming de eventos con Kafka
+' Referencias:
+'   ms-programacion/.../config/KafkaProducerConfig.java:L41-L47 (ocupacion-clases: 3 part., retention.ms=604800000)
+'   ms-programacion/.../config/KafkaConsumerConfig.java:L32, L39, L57, L63-L64 (sin auto-commit, 1 registro/poll,
+'     MANUAL_IMMEDIATE, pollTimeout 1000, concurrencia 3)
+'   ms-programacion/.../service/ClaseService.java:L81-L82; messaging/OcupacionClaseListener.java:L19-L25
+'   ms-programacion/.../controller/AdminKafkaController.java:L27-L32 (seekToBeginning)
+'   ms-membresias/.../config/KafkaProducerConfig.java:L42-L56 (datos-entrenamiento, entrenamiento-resumen)
+'   ms-membresias/.../config/KafkaStreamsConfig.java:L39, L47, L65-L82 (ventana 5 min)
+'   ms-membresias/.../service/MiembroService.java:L66-L67; messaging/ResumenEntrenamientoListener.java:L11-L18
+' Broker unico KRaft, replication factor 1 (docker-compose.yml:L129-L150).
+
+title Kafka - ocupacion en tiempo real, Kafka Streams y recuperacion
+
+autonumber
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam noteBackgroundColor #FFF8DC
+
+participant "Postman" as C
+box "ms-programacion" #FFF4F0
+  participant "ClaseService /\nAdminKafkaController" as CS
+  participant "OcupacionClaseListener\n(ms-programacion-dashboard)" as OL
+end box
+box "kafka" #F0F4FF
+  participant "ocupacion-clases\n3 part., 7 d" as TO
+  participant "~__consumer_offsets" as OFF
+  participant "datos-entrenamiento\n3 part., 7 d" as TD
+  participant "entrenamiento-resumen\n3 part., 7 d" as TR
+end box
+box "ms-membresias" #F4FFF0
+  participant "Kafka Streams\n(ms-membresias-streams)" as KS
+  participant "MiembroService" as MS
+  participant "ResumenEntrenamiento\nListener" as RL
+end box
+
+== ocupacion-clases: tiempo real ==
+C -> CS : POST /api/clases/{id}/ocupacion
+CS -> TO : OcupacionClaseEvento, key = claseId
+CS --> C : 202
+TO -> OL : poll (1 registro)
+OL -> OL : log "Dashboard: clase <id> tiene ahora <n> personas"
+OL -> OFF : acknowledge() = checkpoint (MANUAL_IMMEDIATE)
+
+== datos-entrenamiento -> Kafka Streams -> entrenamiento-resumen ==
+C -> MS : POST /api/miembros/{id}/entrenamientos
+MS -> TD : DatoEntrenamientoEvento, key = miembroId
+MS --> C : 202
+TD -> KS : groupByKey
+KS -> KS : ventana 5 min: suma minutos y calorias,\ncuenta sesiones (state store + changelog)
+KS -> TR : ResumenEntrenamientoEvento
+TR -> RL : poll
+RL -> RL : log "Resumen ... 2 sesiones, 75 min, 650 calorias"
+RL -> OFF : acknowledge() (MANUAL)
+
+
+== Recuperacion ==
+group Reinicio: continua desde el ultimo checkpoint
+  note over OL : docker compose restart ms-programacion
+  OL -> OFF : lee offsets commiteados
+  OFF --> OL : offsets commiteados (p0=4, p1=0, p2=3)
+  OL -> TO : "Setting offset ... to the committed offset"\n(no reprocesa: mensajesProcesados = 0)
+end
+group Reproceso desde offset 0 (retencion 7 d)
+  C -> CS : POST /api/admin/kafka/ocupacion-clases/reiniciar (ADMIN)
+  CS -> OL : seekToBeginning()
+  loop cada registro retenido
+    TO -> OL : poll desde offset 0
+    OL -> OFF : acknowledge()
+  end
+  C -> CS : GET .../estado
+  CS --> C : mensajesProcesados 16 -> 23 (7 retenidos)
+end
+note over KS, RL
+  Kafka Streams restaura su estado desde el changelog
+  al reiniciar: NO EJECUTADO en la verificacion.
+end note
+
+@enduml

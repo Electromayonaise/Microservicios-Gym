@@ -1,0 +1,69 @@
+@startuml 03-rabbitmq-secuencia
+' Diagrama de secuencia - Mensajeria asincrona con RabbitMQ
+' Referencias:
+'   ms-membresias/.../config/RabbitMQConfig.java:L31-L44 (inscripcion), L46-L77 (pagos + DLX), L91-L98 (requeue=false)
+'   ms-membresias/.../service/MiembroService.java:L40-L42 (inscripcion), L55-L56 (pago)
+'   ms-membresias/.../messaging/NotificacionInscripcionListener.java:L11-L15
+'   ms-membresias/.../messaging/PagoProcesadorListener.java:L14-L22
+'   ms-membresias/.../messaging/PagoFallidoListener.java:L11-L15
+'   ms-programacion/.../service/ClaseService.java:L68-L70
+'   ms-personal/.../config/RabbitMQConfig.java:L24-L37, messaging/HorarioClaseListener.java:L11-L16
+' Serializacion: Jackson2JsonMessageConverter.
+
+title RabbitMQ - inscripcion, cambio de horario (pub/sub) y DLQ de pagos
+
+autonumber
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam noteBackgroundColor #FFF8DC
+
+participant "Postman" as C
+box "ms-membresias" #F4FFF0
+  participant "MiembroService" as MS
+  participant "Notificacion\nInscripcionListener" as NL
+  participant "PagoProcesador\nListener" as PL
+  participant "PagoFallido\nListener" as PFL
+end box
+box "rabbitmq" #F0F4FF
+  participant "membresias.exchange (topic)\n-> notificacion.inscripcion.queue" as QI
+  participant "pagos.exchange (direct)\n-> pagos.procesar.queue" as QP
+  participant "pagos.dlx (direct)\n-> pagos.dlq" as QD
+  participant "programacion.exchange (topic)\n-> horario.clase.queue" as QH
+end box
+box "ms-programacion" #FFF4F0
+  participant "ClaseService" as CS
+end box
+box "ms-personal" #FFFFF0
+  participant "HorarioClase\nListener" as HL
+end box
+
+== Flujo 1: nueva inscripcion ==
+C -> MS : POST /api/miembros (ADMIN)
+MS -> QI : InscripcionNotificacionDTO\nrk miembro.inscrito
+MS --> C : 200
+QI -> NL : entrega
+NL -> NL : log "Notificacion de inscripcion enviada a <email>"
+
+== Flujo 2: cambio de horario (publish/subscribe) ==
+C -> CS : PATCH /api/clases/{id}/horario (ADMIN/TRAINER)
+CS -> QH : HorarioClaseCambiadoEvento\nrk clase.horario.cambiado
+CS --> C : 200
+QH -> HL : entrega
+HL -> HL : log "Notificando a entrenadorId=<id> ..."
+
+== Flujo 3: pago fallido -> DLQ ==
+C -> MS : POST /api/miembros/{id}/pagos (ADMIN/MEMBER)
+MS -> QP : PagoDTO, rk pago.procesar
+MS --> C : 202
+QP -> PL : entrega
+alt monto > 0
+  PL -> PL : log "Pago procesado"; ack
+else monto nulo o <= 0
+  PL --> QP : AmqpRejectAndDontRequeueException\n-> reject(requeue=false)
+  QP -> QD : dead-letter: x-dead-letter-exchange=pagos.dlx,\nx-dead-letter-routing-key=pago.fallido
+  QD -> PFL : entrega
+  PFL -> PFL : log "ALERTA: pago rechazado ..."
+end
+
+
+@enduml
