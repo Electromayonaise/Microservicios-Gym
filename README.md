@@ -1,42 +1,51 @@
 # Sistema de Gestión de un Gimnasio — de monolito a microservicios
 
-Taller de Domain-Driven Design: transformar un monolito Spring Boot de gestión de gimnasio en una arquitectura de microservicios. Enunciado completo en [`docs/Statement.pdf`](docs/Statement.pdf). Presentación en [`docs/DDD-Monolito-a-Microservicios-Gimnasio.pptx`](docs/DDD-Monolito-a-Microservicios-Gimnasio.pptx).
+Proyecto de la asignatura en dos talleres:
+
+1. **Taller 1 — DDD:** transformar un monolito Spring Boot de gestión de gimnasio en una arquitectura de microservicios. Enunciado en [`docs/taller-1/Statement.pdf`](docs/taller-1/Statement.pdf), presentación en [`docs/taller-1/DDD-Monolito-a-Microservicios-Gimnasio.pptx`](docs/taller-1/DDD-Monolito-a-Microservicios-Gimnasio.pptx).
+2. **Taller 2 — Seguridad, APIs RESTful y comunicación asíncrona:** Keycloak + JWT, Swagger/OpenAPI, RabbitMQ y Kafka sobre los mismos microservicios. Informe técnico y guion de presentación en [`docs/taller-2/INFORME.md`](docs/taller-2/INFORME.md).
 
 ## Contenido del repo
 
 | Carpeta | Qué es |
 |---|---|
 | [`monilito-gimnasio/`](monilito-gimnasio) | El monolito original, punto de partida del taller |
-| [`docs/ddd-microservicios.md`](docs/ddd-microservicios.md) | Análisis DDD: dominio, contextos acotados, agregados, value objects y diagrama de componentes |
-| [`docs/DDD-Monolito-a-Microservicios-Gimnasio.pptx`](docs/DDD-Monolito-a-Microservicios-Gimnasio.pptx) | Presentación del taller |
+| [`docs/taller-1/`](docs/taller-1) | Taller 1: análisis DDD ([`ddd-microservicios.md`](docs/taller-1/ddd-microservicios.md)), enunciado y presentación |
+| [`docs/taller-2/`](docs/taller-2) | Taller 2: [`INFORME.md`](docs/taller-2/INFORME.md) (informe y guion), [`SWAGGER.md`](docs/taller-2/SWAGGER.md) (evidencias de la API), [`diagramas/`](docs/taller-2/diagramas) (PlantUML + PNG) y [`videos/`](docs/taller-2/videos) (demos en ejecución) |
 | [`ms-membresias/`](ms-membresias) | Microservicio — contexto **Membresías** |
 | [`ms-programacion/`](ms-programacion) | Microservicio — contexto **Programación** |
 | [`ms-personal/`](ms-personal) | Microservicio — contexto **Personal** |
 | [`ms-inventario/`](ms-inventario) | Microservicio — contexto **Inventario** |
-| [`docker-compose.yml`](docker-compose.yml) | Levanta los 4 microservicios + Keycloak con un solo comando |
+| [`docker-compose.yml`](docker-compose.yml) | Levanta los 4 microservicios + Keycloak, RabbitMQ, Kafka y Kafka UI con un solo comando |
 | [`keycloak/full-export/`](keycloak/full-export) | Configuración de Keycloak exportada (realm `gimnasio`, clientes, roles, usuarios de prueba) |
-| [`postman/`](postman) | Colección de Postman con pruebas de los endpoints de cada microservicio |
+| [`postman/`](postman) | Colección de Postman con pruebas de seguridad, RabbitMQ, Kafka y de los endpoints de cada microservicio |
 
 ## Arquitectura
 
-Cuatro microservicios independientes, uno por contexto acotado, cada uno con su propia base de datos (H2 en memoria). El único cruce entre servicios es **Programación → Personal**: al programar una clase se valida el `entrenadorId` contra `ms-personal` vía REST (reenviando el JWT del usuario). Todos los endpoints están protegidos con JWT emitido por Keycloak y autorización basada en roles (`ROLE_ADMIN`, `ROLE_TRAINER`, `ROLE_MEMBER`).
+Cuatro microservicios independientes, uno por contexto acotado, cada uno con su propia base de datos (H2 en memoria). El único cruce entre servicios es **Programación → Personal**: al programar una clase se valida el `entrenadorId` contra `ms-personal` vía REST (reenviando el JWT del usuario). La comunicación asíncrona usa RabbitMQ (notificaciones, publish/subscribe y DLQ) y Kafka (streaming en tiempo real y Kafka Streams). Todos los endpoints están protegidos con JWT emitido por Keycloak y autorización basada en roles (`ROLE_ADMIN`, `ROLE_TRAINER`, `ROLE_MEMBER`).
 
 | Microservicio | Puerto | Entidad | Endpoints | Roles permitidos |
 |---|---|---|---|---|
 | `ms-membresias` | `8081` | Miembro | `POST /api/miembros` | `ROLE_ADMIN` |
 | | | | `GET /api/miembros` | `ROLE_ADMIN`, `ROLE_TRAINER` |
-| `ms-programacion` | `8082` | Clase | `POST /api/clases` | `ROLE_ADMIN`, `ROLE_TRAINER` |
+| | | | `POST /api/miembros/{id}/pagos`, `POST /api/miembros/{id}/entrenamientos` | `ROLE_ADMIN`, `ROLE_MEMBER` |
+| `ms-programacion` | `8082` | Clase | `POST /api/clases`, `PATCH /api/clases/{id}/horario`, `POST /api/clases/{id}/ocupacion` | `ROLE_ADMIN`, `ROLE_TRAINER` |
 | | | | `GET /api/clases`, `GET /api/clases/{id}/entrenador` | `ROLE_ADMIN`, `ROLE_TRAINER`, `ROLE_MEMBER` |
+| | | | `POST /api/admin/kafka/ocupacion-clases/reiniciar`, `GET /api/admin/kafka/ocupacion-clases/estado` | `ROLE_ADMIN` |
 | `ms-personal` | `8083` | Entrenador | `POST /api/entrenadores` | `ROLE_ADMIN` |
 | | | | `GET /api/entrenadores`, `GET /api/entrenadores/{id}` | `ROLE_ADMIN`, `ROLE_TRAINER`, `ROLE_MEMBER` |
 | `ms-inventario` | `8084` | Equipo | `POST /api/equipos` | `ROLE_ADMIN` |
 | | | | `GET /api/equipos` | `ROLE_ADMIN`, `ROLE_TRAINER`, `ROLE_MEMBER` |
 
-Diagrama de componentes completo (PlantUML) en [`docs/ddd-microservicios.md`](docs/ddd-microservicios.md#diagrama-de-componentes).
+Diagrama de arquitectura (vista C4 de contenedores):
+
+![Arquitectura](docs/taller-2/diagramas/01-arquitectura-c4.png)
+
+Más diagramas en [`docs/taller-2/diagramas/`](docs/taller-2/diagramas): secuencia de seguridad JWT, secuencias y topologías de RabbitMQ y Kafka. El diagrama de componentes del taller 1 está en [`docs/taller-1/ddd-microservicios.md`](docs/taller-1/ddd-microservicios.md#diagrama-de-componentes).
 
 ## Stack
 
-Java 17 · Spring Boot 3.3.2 · Spring Data JPA · H2 (en memoria) · Spring Security (OAuth2 Resource Server / JWT) · Keycloak · springdoc-openapi (Swagger UI) · Maven (con wrapper `./mvnw`) · Spring `RestClient` para la comunicación entre servicios · Docker Compose.
+Java 17 · Spring Boot 3.3.2 · Spring Data JPA · H2 (en memoria) · Spring Security (OAuth2 Resource Server / JWT) · Keycloak · springdoc-openapi (Swagger UI) · Spring AMQP + RabbitMQ · Spring Kafka + Kafka Streams · Maven (con wrapper `./mvnw`) · Spring `RestClient` para la comunicación entre servicios · Docker Compose.
 
 ## Seguridad: Keycloak + JWT
 
@@ -72,12 +81,11 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8083/api/entrenadores
 
 Casos verificados: sin header `Authorization` → `401`; token inválido/expirado → `401`; rol sin permiso para el endpoint → `403`; rol correcto → `200`.
 
-> ⚠️ Con esta seguridad activa, la colección de Postman existente necesita agregar el header `Authorization: Bearer <token>` a cada request — ya no funciona "tal cual" contra los endpoints protegidos.
+La colección de Postman obtiene los tokens de `admin1`, `trainer1` y `member1` en su carpeta `0. Auth` y los usa en el resto de requests.
 
 ## Mensajería asíncrona: RabbitMQ
 
-Tres flujos de mensajería sobre RabbitMQ (diseño completo en
-[`docs/superpowers/specs/2026-09-14-rabbitmq-integracion-design.md`](docs/superpowers/specs/2026-09-14-rabbitmq-integracion-design.md)):
+Tres flujos de mensajería sobre RabbitMQ (topología en [`docs/taller-2/diagramas/05-rabbitmq-topologia.png`](docs/taller-2/diagramas/05-rabbitmq-topologia.png), secuencia en [`03-rabbitmq-secuencia.png`](docs/taller-2/diagramas/03-rabbitmq-secuencia.png)):
 
 | Flujo | Productor → Consumidor | Exchange / cola |
 |---|---|---|
@@ -89,25 +97,24 @@ Tres flujos de mensajería sobre RabbitMQ (diseño completo en
 
 ## Streaming de eventos: Kafka
 
-Dos flujos de streaming sobre Kafka (diseño completo en
-[`docs/superpowers/specs/2026-09-15-kafka-integracion-design.md`](docs/superpowers/specs/2026-09-15-kafka-integracion-design.md)):
+Dos flujos de streaming sobre Kafka (topología en [`docs/taller-2/diagramas/06-kafka-topologia.png`](docs/taller-2/diagramas/06-kafka-topologia.png), secuencia en [`04-kafka-secuencia.png`](docs/taller-2/diagramas/04-kafka-secuencia.png)):
 
 | Flujo | Productor → Consumidor | Topic |
 |---|---|---|
 | Ocupación de clases en tiempo real | `ms-programacion` → `ms-programacion` | `ocupacion-clases` |
 | Análisis de datos de entrenamiento (Kafka Streams, ventana de 5 min) | `ms-membresias` → `ms-membresias` (vía `datos-entrenamiento` → topología de agregación → `entrenamiento-resumen`) | `datos-entrenamiento`, `entrenamiento-resumen` |
 
-`docker compose up` levanta también los contenedores `kafka` (imagen `confluentinc/cp-kafka`, modo KRaft sin Zookeeper) y `kafka-ui` (consola web). Consola: `http://localhost:8090` — cluster `local`, sin autenticación. Desde ahí se puede inspeccionar cada topic (particiones, mensajes, offset commiteado por cada consumer group) mientras se prueban los endpoints que publican eventos: `POST /api/clases/{id}/ocupacion`, `POST /api/miembros/{id}/entrenamientos`. El endpoint `POST /api/admin/kafka/ocupacion-clases/reiniciar` (solo `ROLE_ADMIN`) demuestra el mecanismo de recuperación ante fallos: aprovecha la retención de 7 días del topic `ocupacion-clases` para reprocesar el historial completo desde el offset 0.
+`docker compose up` levanta también los contenedores `kafka` (imagen `confluentinc/cp-kafka`, modo KRaft sin Zookeeper) y `kafka-ui` (consola web). Consola: `http://localhost:8090` — cluster `local`, sin autenticación. Desde ahí se puede inspeccionar cada topic (particiones, mensajes, offset commiteado por cada consumer group) mientras se prueban los endpoints que publican eventos: `POST /api/clases/{id}/ocupacion`, `POST /api/miembros/{id}/entrenamientos`. El endpoint `POST /api/admin/kafka/ocupacion-clases/reiniciar` (solo `ROLE_ADMIN`) demuestra el mecanismo de recuperación ante fallos: aprovecha la retención de 7 días del topic `ocupacion-clases` para reprocesar el historial completo desde el offset 0. Además, al reiniciar un consumidor, cada partición retoma desde su último offset commiteado (commit manual tras procesar cada mensaje).
 
 ## Documentación de la API (Swagger/OpenAPI)
 
-Cada microservicio expone su documentación sin necesidad de token en `http://localhost:<puerto>/swagger-ui/index.html` (JSON crudo en `/v3/api-docs`).
+Cada microservicio expone su documentación sin necesidad de token en `http://localhost:<puerto>/swagger-ui/index.html` (JSON crudo en `/v3/api-docs`). Capturas y tabla de endpoints por servicio en [`docs/taller-2/SWAGGER.md`](docs/taller-2/SWAGGER.md).
 
 ## Cómo correrlo
 
 ### Opción 1: Docker Compose (recomendada)
 
-Construye y levanta los 4 microservicios con un solo comando:
+Construye y levanta los 4 microservicios junto con Keycloak, RabbitMQ, Kafka y Kafka UI con un solo comando:
 
 ```bash
 docker compose up --build
@@ -154,3 +161,16 @@ newman run postman/Gimnasio-Microservicios.postman_collection.json
 ```
 
 No hace falta `--delay-request` ni ningún otro delay global: cada chequeo que depende de un efecto asíncrono (offset commiteado en Kafka, `message_stats` de una cola en RabbitMQ) sondea con reintentos hasta ver el valor esperado o agotar un timeout generoso, en vez de asumir que una espera fija ya fue suficiente. Esto reemplazó un diseño anterior basado en un delay fijo antes de cada request, que era inherentemente frágil: tanto el offset de Kafka como `message_stats` de RabbitMQ los actualiza un agregador de estadísticas en un intervalo periódico (Kafka: hasta el `pollTimeout` del consumidor; RabbitMQ: ~5s por defecto), así que ninguna espera fija corta es fiable — y una lo bastante larga para el peor caso ralentiza toda la colección.
+
+## Videos de demostración
+
+Grabaciones del sistema en ejecución en [`docs/taller-2/videos/`](docs/taller-2/videos):
+
+| Video | Qué muestra |
+|---|---|
+| [`01-seguridad.mp4`](docs/taller-2/videos/01-seguridad.mp4) | Respuestas 401 / 403 / 200 según el token y el rol, y reenvío del JWT entre servicios |
+| [`02-rabbitmq-flujos.mp4`](docs/taller-2/videos/02-rabbitmq-flujos.mp4) | Notificación de inscripción y publish/subscribe de cambio de horario |
+| [`03-rabbitmq-dlq.mp4`](docs/taller-2/videos/03-rabbitmq-dlq.mp4) | Pago válido procesado y pago inválido enviado a `pagos.dlq` |
+| [`04-kafka-ocupacion.mp4`](docs/taller-2/videos/04-kafka-ocupacion.mp4) | Evento de ocupación consumido en tiempo real; offset y lag en Kafka UI |
+| [`05-kafka-streams.mp4`](docs/taller-2/videos/05-kafka-streams.mp4) | Agregación de entrenamientos con Kafka Streams en `entrenamiento-resumen` |
+| [`06-kafka-recuperacion.mp4`](docs/taller-2/videos/06-kafka-recuperacion.mp4) | Reinicio desde el último offset commiteado y reproceso desde offset 0 |
